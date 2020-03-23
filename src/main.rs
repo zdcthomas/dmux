@@ -18,8 +18,8 @@ use std::process::{Command, Stdio};
 use tmux_interface::session::SESSION_ALL;
 use tmux_interface::window::WINDOW_ALL;
 use tmux_interface::{
-    AttachSession, DetachClient, Error, NewSession, NewWindow, SelectWindow, SendKeys, Sessions,
-    SplitWindow, SwitchClient, TmuxInterface,
+    AttachSession, DetachClient, Error, NewSession, NewWindow, RespawnPane, SelectWindow, SendKeys,
+    Sessions, SwitchClient, TmuxInterface,
 };
 
 fn session_has_window(session_name: &str, window_name: &str) -> bool {
@@ -126,7 +126,7 @@ fn split_window(session_name: &str, window_name: &str, tmux: &mut TmuxInterface)
         target_pane: Some(target.as_str()),
         ..Default::default()
     };
-    let keys = vec!["tmux split-window -hb", "Enter"];
+    let keys = vec!["tmux split-window", "Enter"];
     let s = tmux.send_keys(Some(&split), &keys);
     println!("split info {:?}", s);
 }
@@ -153,9 +153,32 @@ fn setup_layout(session_name: &str, window_name: &str, tmux: &mut TmuxInterface)
     ];
     let s = tmux.send_keys(Some(&split), &keys);
     println!("split info {:?}", s);
-
     //
 }
+
+fn reset_pane(target: &str, tmux: &mut TmuxInterface) {
+    let mut sk = SendKeys::new();
+    sk.target_pane = Some(target);
+    let keys = vec!["clear", "Enter"];
+    let s = tmux.send_keys(Some(&sk), &keys);
+}
+
+fn send_init_command(
+    session_name: &str,
+    window_name: &str,
+    pane: &str,
+    command: &str,
+    tmux: &mut TmuxInterface,
+) {
+    let target = format!("{}:{}.{}", session_name, window_name, pane);
+    let mut sk = SendKeys::new();
+    sk.target_pane = Some(&target.as_str());
+    reset_pane(target.as_str(), tmux);
+    let keys = vec![command, "Enter"];
+    println!("sending {:?} to {:?}", keys, target);
+    let s = tmux.send_keys(Some(&sk), &keys);
+}
+
 fn main() {
     // session_has_window("zacharythomas", "violet");
     let mut tmux = TmuxInterface::new();
@@ -180,6 +203,8 @@ fn main() {
     attach_or_create_window(session_name, window_name, dir, &mut tmux);
     split_window(session_name, window_name, &mut tmux);
     setup_layout(session_name, window_name, &mut tmux);
+    send_init_command(session_name, window_name, "0", "nvim", &mut tmux);
+    send_init_command(session_name, window_name, "1", "fish", &mut tmux);
 
     // let check = Path::new(dir).is_dir();
     // let create_ses = create_session(session_name, window_name, &mut tmux);
