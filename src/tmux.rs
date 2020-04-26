@@ -6,8 +6,7 @@ use tmux_interface::pane::PANE_ALL;
 use tmux_interface::session::SESSION_ALL;
 use tmux_interface::window::WINDOW_ALL;
 use tmux_interface::{
-    NewSession, NewWindow, SelectWindow, SendKeys, Sessions, SplitWindow, SwitchClient,
-    TmuxInterface, Windows,
+    NewSession, NewWindow, SendKeys, Sessions, SplitWindow, SwitchClient, TmuxInterface, Windows,
 };
 
 #[allow(dead_code)]
@@ -30,7 +29,6 @@ pub fn default_layout_checksum<'a>() -> &'a str {
 #[allow(dead_code)]
 pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
     let mut tmux = Tmux::new();
-    println!("finding or creating window");
     let to_be_deleted: Option<String>;
     let session: &mut Session;
 
@@ -54,19 +52,6 @@ pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
             .remove_window(delete_name.as_str())
             .expect("Could not remove temp window");
     }
-
-    //     if let Some(window) = session.find_window("foo") {
-    //       window.attach().expect("couldn't attach to window");
-    //     } else {
-    //       let window = session
-    //         .create_window("foo", "/Users/zacharythomas/dev/Toskr/")
-    //         .expect("could not create window");
-    //       println!("setting up layout");
-    //       window.setup_layout(layout).unwrap();
-    //       println!("sending initial commands");
-    //       window.initial_command(commands);
-    //       window.attach().expect("couldn't attach to window");
-    //     }
     tmux
 }
 
@@ -160,9 +145,9 @@ impl Session {
         let window = self
             .create_window(workspace.window_name, workspace.dir)
             .expect("could not create window");
-        println!("setting up layout");
-        window.setup_layout(workspace.layout).unwrap();
-        println!("sending initial commands");
+        window
+            .setup_layout(workspace.layout, workspace.dir)
+            .unwrap();
         window.initial_command(workspace.commands);
         return window;
     }
@@ -238,7 +223,7 @@ pub struct Layout {
 
 pub type Commands = HashMap<i32, String>;
 
-struct Window {
+pub struct Window {
     panes: Vec<Pane>,
     session_name: String,
     number_of_panes: i32,
@@ -246,13 +231,6 @@ struct Window {
 }
 
 impl Window {
-    pub fn default_commands() -> Commands {
-        let mut commands = HashMap::new();
-        commands.insert(0, String::from("nvim"));
-        commands.insert(1, String::from("echo yo"));
-        commands
-    }
-
     #[allow(dead_code)]
     fn from_interface(win: tmux_interface::Window, session_name: String) -> Window {
         let name = session_name.clone();
@@ -295,9 +273,10 @@ impl Window {
     }
 
     #[allow(dead_code)]
-    fn split_window(&mut self) -> Result<String, tmux_interface::Error> {
+    fn split_window(&mut self, dir: &str) -> Result<String, tmux_interface::Error> {
         let target = self.target(0);
         let split = SplitWindow {
+            cwd: Some(dir),
             target_pane: Some(target.as_str()),
             ..Default::default()
         };
@@ -310,21 +289,17 @@ impl Window {
     }
 
     #[allow(dead_code)]
-    pub fn setup_layout(&mut self, layout: Layout) -> Result<Output, tmux_interface::Error> {
+    pub fn setup_layout(
+        &mut self,
+        layout: Layout,
+        dir: &str,
+    ) -> Result<Output, tmux_interface::Error> {
         self.reload_panes();
-        println!(" pre number_of_panes {}", self.number_of_panes);
-        println!("layout window_count {}", layout.window_count);
         if self.number_of_panes < layout.window_count {
             for _x in self.number_of_panes..layout.window_count {
-                self.split_window().expect("couldn't split window");
+                self.split_window(dir).expect("couldn't split window");
             }
         }
-        // if self.number_of_panes > layout.window_count {
-        //     for _x in layout.window_count..self.number_of_panes {
-        //         let target = format!("tmux kill-pane -t {}", self.target(0));
-        //         self.send_keys(vec![target.as_str(), "Enter"]).unwrap();
-        //     }
-        // }
         let tmux_command = format!(
             "tmux select-layout -t {} \"{}\"",
             self.target(0),
@@ -342,7 +317,6 @@ impl Window {
     #[allow(dead_code)]
     pub fn attach(&self) -> Result<Output, tmux_interface::Error> {
         let target = self.target(0);
-        println!("attaching to {}", target);
         let select = SwitchClient {
             target_session: Some(target.as_str()),
             ..Default::default()

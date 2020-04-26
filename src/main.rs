@@ -12,22 +12,14 @@ use clap::{App, Arg, SubCommand};
 use regex::Regex;
 use select::Selector;
 use std::collections::HashMap;
-use std::env;
-use std::io::Error;
 use std::path::Path;
-use std::process::{Child, Command, Output, Stdio};
-use tmux::{Commands, Layout, WorkSpace};
+use std::process::Command;
+use tmux::{Layout, WorkSpace};
 use url::Url;
-use walkdir::{DirEntry, WalkDir};
-
-use tmux_interface::session::SESSION_ALL;
-
-fn in_tmux() -> bool {
-    env::var("TMUX").is_ok()
-}
+// use std::env;
 
 fn default_session_name<'a>() -> &'a str {
-    return "development";
+    return "dev";
 }
 // -> Result<Output, Error>
 fn git_url_to_dir_name(url: &Url) -> String {
@@ -110,7 +102,6 @@ fn main() {
 
 fn setup_workspace(selected_dir: String, number_of_panes: i32, layout: &str, session_name: &str) {
     let path = Path::new(selected_dir.as_str());
-    println!("do the tmux sent to {:?}", path);
     let layout = Layout {
         window_count: number_of_panes,
         layout_checksum: String::from(layout),
@@ -118,7 +109,7 @@ fn setup_workspace(selected_dir: String, number_of_panes: i32, layout: &str, ses
 
     let mut commands = HashMap::new();
     commands.insert(0, String::from("nvim"));
-    commands.insert(1, String::from("pipes.sh"));
+    commands.insert(1, String::from("fish"));
 
     let workspaces = WorkSpace {
         session_name,
