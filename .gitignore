@@ -2,3 +2,4 @@ h
 nvim
 target
 **/*.rs.bk
+**/**/.DS_Store

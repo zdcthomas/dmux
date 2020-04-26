@@ -1,6 +1,6 @@
 [package]
-name = "dev_tmux"
-version = "0.1.0"
+name = "dmux"
+version = "0.0.2"
 authors = ["Zachary Thomas <zdcthomas@yahoo.com>"]
 edition = "2018"
 
