@@ -23,6 +23,10 @@ pub struct WorkSpace<'a> {
     pub commands: Commands,
 }
 
+pub fn default_layout_checksum<'a>() -> &'a str {
+    "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"
+}
+
 #[allow(dead_code)]
 pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
     let mut tmux = Tmux::new();
@@ -229,7 +233,7 @@ impl Session {
 pub struct Layout {
     // I wouldn't need two things here if I could just parse the tmux layout checksum
     pub window_count: i32,
-    pub layout_string: String,
+    pub layout_checksum: String,
 }
 
 pub type Commands = HashMap<i32, String>;
@@ -247,13 +251,6 @@ impl Window {
         commands.insert(0, String::from("nvim"));
         commands.insert(1, String::from("echo yo"));
         commands
-    }
-
-    pub fn default_layout() -> Layout {
-        Layout {
-            window_count: 2,
-            layout_string: String::from("34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"),
-        }
     }
 
     #[allow(dead_code)]
@@ -331,7 +328,7 @@ impl Window {
         let tmux_command = format!(
             "tmux select-layout -t {} \"{}\"",
             self.target(0),
-            layout.layout_string
+            layout.layout_checksum
         );
         self.reload_panes();
         self.send_keys(vec![tmux_command.as_str(), "Enter"])
@@ -432,7 +429,7 @@ mod tests {
     fn test_new() {
         let layout = Layout {
             window_count: 2,
-            layout_string: String::from("34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"),
+            layout_checksum: String::from("34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"),
         };
 
         let mut commands = HashMap::new();
