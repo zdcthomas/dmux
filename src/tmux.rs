@@ -6,7 +6,8 @@ use tmux_interface::pane::PANE_ALL;
 use tmux_interface::session::SESSION_ALL;
 use tmux_interface::window::WINDOW_ALL;
 use tmux_interface::{
-    NewSession, NewWindow, SendKeys, Sessions, SplitWindow, SwitchClient, TmuxInterface, Windows,
+    AttachSession, NewSession, NewWindow, SendKeys, Sessions, SplitWindow, SwitchClient,
+    TmuxInterface, Windows,
 };
 
 #[allow(dead_code)]
@@ -317,12 +318,21 @@ impl Window {
     #[allow(dead_code)]
     pub fn attach(&self) -> Result<Output, tmux_interface::Error> {
         let target = self.target(0);
-        let select = SwitchClient {
-            target_session: Some(target.as_str()),
-            ..Default::default()
-        };
-        let mut tmux = TmuxInterface::new();
-        tmux.switch_client(Some(&select))
+        if let Ok(_) = std::env::var("TMUX") {
+            let select = SwitchClient {
+                target_session: Some(target.as_str()),
+                ..Default::default()
+            };
+            let mut tmux = TmuxInterface::new();
+            return tmux.switch_client(Some(&select));
+        } else {
+            let attach = AttachSession {
+                target_session: Some(&target),
+                ..Default::default()
+            };
+            let mut tmux = TmuxInterface::new();
+            return tmux.attach_session(Some(&attach));
+        }
     }
 
     #[allow(dead_code)]
