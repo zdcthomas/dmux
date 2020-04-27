@@ -1,6 +1,6 @@
-#DMUX
+# DMUX
 ## (Development tMUX)
-###new names definitely being considered
+### new names definitely being considered
 
 ## Installation 
 MacOs 
@@ -9,16 +9,16 @@ brew tap zdcthomas/tools
 brew install dmux
 ```
 
-##Usage
+## Usage
 * `dmux` alone will use `fzf` to open up a list of dirs in `~`.
 * `dmux --help` for help
 
-##Planned features
+## Planned features
 - [ ] Subcommand for killing windows from fzf
 - [ ] Config file to be read on startup
 - [ ] Subcommand to describe current layout
 - [ ] Args for command/pane pairs
 - [ ] Args for layout string
 
-##Bugs
+## Bugs
 #### please submit bugs as issues and I'll add them here
