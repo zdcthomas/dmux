@@ -131,7 +131,7 @@ fn setup_workspace(selected_dir: String, number_of_panes: i32, layout: &str, ses
 
 fn args<'a>() -> clap::ArgMatches<'a> {
     App::new("DMUX")
-        .version("0.0.3")
+        .version("0.1.0")
         .author("Zdcthomas")
         .about("a nicer way to open up tmux 'workspaces'")
         .arg(Arg::with_name("repo").help("clones a repo from a git remote"))

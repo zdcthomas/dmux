@@ -9,7 +9,11 @@ for target in $targets
 do
   echo building for $target
   cargo build --release --target $target
-  files="$files -a ./target/$target/release/dmux#dmux-$version-$target.tar.gz"
+  artifact=./target/$target/release/dmux
+  shasum=$(shasum --algorithm 256 $artifact)
+  files="$files -a $artifact#dmux-$version-$target.tar.gz"
+  echo "sha256"
+  echo "$shasum"
 done
 echo $files
 
