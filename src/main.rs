@@ -13,7 +13,7 @@ use regex::Regex;
 use select::Selector;
 use std::collections::HashMap;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use tmux::{Layout, WorkSpace};
 use url::Url;
 // use std::env;
@@ -30,16 +30,21 @@ fn git_url_to_dir_name(url: &Url) -> String {
 
 fn clone_from(repo: &str, target_dir: &Path) -> String {
     if let Ok(url) = Url::parse(repo) {
+        println!("cloning {:?}", url);
         let dir_name = git_url_to_dir_name(&url);
         let target = target_dir.clone().join(dir_name.clone());
         let target_string = target.to_str().expect("couldn't make remote into dir");
-        if target.exists() {
+        if !target.exists() {
+            println!("cloning {:?}", target);
             Command::new("git")
                 .arg("clone")
                 .arg(url.as_str())
                 .arg(target_string)
-                .spawn()
-                .unwrap();
+                .stdout(Stdio::inherit())
+                .output()
+                .expect("could not clone");
+        } else {
+            println!("dir already found");
         }
         return target_string.to_owned();
     } else {
@@ -89,9 +94,11 @@ fn main() {
             if let Some(t) = clone.value_of("target_dir") {
                 let target_dir = Path::new(t);
                 dir = clone_from(repo, &target_dir);
+                println!("repo: {:?}", dir);
             } else {
                 let target_dir = dirs::home_dir().unwrap();
                 dir = clone_from(repo, &target_dir);
+                println!("repo: {:?}", dir);
             }
             setup_workspace(dir, number_of_panes, layout, session_name)
         }
@@ -111,6 +118,7 @@ fn setup_workspace(selected_dir: String, number_of_panes: i32, layout: &str, ses
     commands.insert(0, String::from("nvim"));
     commands.insert(1, String::from("fish"));
 
+    println!("sending you to: {:?}", path);
     let workspaces = WorkSpace {
         session_name,
         window_name: path_to_window_name(path),

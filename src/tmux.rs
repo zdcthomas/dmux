@@ -1,4 +1,5 @@
 extern crate tmux_interface;
+use regex::Regex;
 use std::collections::HashMap;
 use std::process::Output;
 use std::result::Result;
@@ -10,11 +11,27 @@ use tmux_interface::{
     TmuxInterface, Windows,
 };
 
-#[allow(dead_code)]
 pub struct Tmux {
     sessions: Vec<Session>,
 }
 
+fn target(session_name: &str, window_name: &str, pane: i32) -> String {
+    format!(
+        "{}:{}.{}",
+        clean_for_target(session_name),
+        clean_for_target(window_name),
+        pane
+    )
+}
+
+// name's like `coc.nvim` break tmux's target conventions
+// once again, tmux is kinda annoying
+fn clean_for_target(string: &str) -> String {
+    let re = Regex::new(r"\.").unwrap();
+    re.replace_all(string, "-").into_owned()
+}
+
+// make these into String
 pub struct WorkSpace<'a> {
     pub session_name: &'a str,
     pub window_name: &'a str,
@@ -27,7 +44,6 @@ pub fn default_layout_checksum<'a>() -> &'a str {
     "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"
 }
 
-#[allow(dead_code)]
 pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
     let mut tmux = Tmux::new();
     let to_be_deleted: Option<String>;
@@ -56,23 +72,20 @@ pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
     tmux
 }
 
-#[allow(dead_code)]
 impl Tmux {
-    #[allow(dead_code)]
     pub fn new() -> Tmux {
         Tmux {
             sessions: Session::all_sessions(),
         }
     }
 
-    #[allow(dead_code)]
     pub fn send_keys(
         session_name: &str,
         window_name: &str,
         pane: i32,
         keys: Vec<&str>,
     ) -> Result<Output, tmux_interface::Error> {
-        let target = format!("{}:{}.{}", session_name, window_name, pane);
+        let target = target(session_name, window_name, pane);
         let split = SendKeys {
             target_pane: Some(target.as_str()),
             ..Default::default()
@@ -80,7 +93,6 @@ impl Tmux {
         TmuxInterface::new().send_keys(Some(&split), &keys)
     }
 
-    #[allow(dead_code)]
     fn find_session(&mut self, name: &str) -> Option<&mut Session> {
         for sess in self.sessions.iter_mut() {
             if sess.name == name {
@@ -95,7 +107,6 @@ impl Tmux {
         self.sessions.iter().any(|s| s.name == name)
     }
 
-    #[allow(dead_code)]
     fn create_session(&mut self, name: &str) -> Option<&mut Session> {
         let mut tmux = TmuxInterface::new();
         let new_session = NewSession {
@@ -105,9 +116,6 @@ impl Tmux {
         };
         tmux.new_session(Some(&new_session))
             .expect("Could not create new session");
-        // let sess = tmux_interface::Session::from_str(name, SESSION_ALL).unwrap();
-        // self.sessions.push(Session::from_interface(sess));
-        // self.sessions.last_mut()
         self.sessions = Session::all_sessions();
         self.find_session(name)
     }
@@ -133,10 +141,9 @@ impl Session {
     }
 
     fn target(&self, window_name: &str, pane: i32) -> String {
-        format!("{}:{}.{}", self.name, window_name, pane)
+        target(self.name.as_str(), window_name, pane)
     }
 
-    #[allow(dead_code)]
     pub fn setup_workspace(&mut self, workspace: WorkSpace) -> &mut Window {
         if self.has_window(workspace.window_name) {
             return self
@@ -153,28 +160,26 @@ impl Session {
         return window;
     }
 
-    #[allow(dead_code)]
     pub fn all_sessions() -> Vec<Session> {
         let sessions = Sessions::get(SESSION_ALL).unwrap();
         Session::from_interface_list(sessions)
     }
-    #[allow(dead_code)]
+
     pub fn from_interface_list(sessions: tmux_interface::Sessions) -> Vec<Session> {
         sessions
             .into_iter()
             .map(|s| Session::from_interface(s))
             .collect()
     }
-    #[allow(dead_code)]
+
     pub fn from_interface(session: tmux_interface::Session) -> Session {
-        let name = session.name.clone().unwrap();
+        let name = clean_for_target(session.name.unwrap().as_str());
         Session {
             windows: Window::all_in_session(name.as_str()),
             name,
         }
     }
 
-    #[allow(dead_code)]
     fn find_window(&mut self, name: &str) -> Option<&mut Window> {
         for win in self.windows.iter_mut() {
             if win.name == name {
@@ -184,24 +189,23 @@ impl Session {
         None
     }
 
-    #[allow(dead_code)]
     fn has_window(&self, name: &str) -> bool {
         self.windows.iter().any(|w| w.name == name)
     }
 
     #[allow(dead_code)]
-    pub fn find_or_create_window(&mut self, name: &str, dir: &str) -> Option<&mut Window> {
-        if self.has_window(name) {
-            self.find_window(name)
+    pub fn find_or_create_window(&mut self, window_name: &str, dir: &str) -> Option<&mut Window> {
+        if self.has_window(window_name) {
+            self.find_window(window_name)
         } else {
-            self.create_window(name, dir)
+            self.create_window(window_name, dir)
         }
     }
 
-    #[allow(dead_code)]
-    fn create_window(&mut self, name: &str, dir: &str) -> Option<&mut Window> {
+    fn create_window(&mut self, window_name: &str, dir: &str) -> Option<&mut Window> {
+        let window_name = clean_for_target(window_name);
         let window = NewWindow {
-            window_name: Some(name),
+            window_name: Some(window_name.as_str()),
             target_window: Some(self.name.as_str()),
             cwd: Some(dir),
             detached: Some(true),
@@ -212,7 +216,7 @@ impl Session {
             .new_window(Some(&window))
             .expect("Could not create new window");
         self.windows = Window::all_in_session(self.name.as_str());
-        self.find_window(name)
+        self.find_window(window_name.as_str())
     }
 }
 
@@ -232,7 +236,6 @@ pub struct Window {
 }
 
 impl Window {
-    #[allow(dead_code)]
     fn from_interface(win: tmux_interface::Window, session_name: String) -> Window {
         let name = session_name.clone();
         let panes =
@@ -249,7 +252,6 @@ impl Window {
         }
     }
 
-    #[allow(dead_code)]
     pub fn all_in_session(session_name: &str) -> Vec<Window> {
         let windows = Windows::get(session_name, WINDOW_ALL).unwrap();
         windows
@@ -258,22 +260,14 @@ impl Window {
             .collect()
     }
 
-    #[allow(dead_code)]
     pub fn send_keys(&self, keys: Vec<&str>) -> Result<Output, tmux_interface::Error> {
         Tmux::send_keys(self.session_name.as_str(), self.name.as_str(), 0, keys)
-        // let target = format!("{}:{}.0", self.session_name, self.name);
-        // let split = SendKeys {
-        //     target_pane: Some(target.as_str()),
-        //     ..Default::default()
-        // };
-        // TmuxInterface::new().send_keys(Some(&split), &keys)
     }
 
     fn target(&self, pane: i32) -> String {
-        format!("{}:{}.{}", self.session_name, self.name, pane)
+        target(self.session_name.as_str(), self.name.as_str(), pane)
     }
 
-    #[allow(dead_code)]
     fn split_window(&mut self, dir: &str) -> Result<String, tmux_interface::Error> {
         let target = self.target(0);
         let split = SplitWindow {
@@ -285,11 +279,8 @@ impl Window {
         let split_result = tmux.split_window(Some(&split));
         self.reload_panes();
         split_result
-        // let target = format!("tmux split-window -t {}", self.target(0));
-        // self.send_keys(vec![target.as_str(), "Enter"]).unwrap();
     }
 
-    #[allow(dead_code)]
     pub fn setup_layout(
         &mut self,
         layout: Layout,
@@ -310,12 +301,10 @@ impl Window {
         self.send_keys(vec![tmux_command.as_str(), "Enter"])
     }
 
-    #[allow(dead_code)]
     fn get_pane(&mut self, pane: i32) -> Option<&Pane> {
         self.panes.iter().find(|p| p.index == pane)
     }
 
-    #[allow(dead_code)]
     pub fn attach(&self) -> Result<Output, tmux_interface::Error> {
         let target = self.target(0);
         if let Ok(_) = std::env::var("TMUX") {
@@ -323,6 +312,7 @@ impl Window {
                 target_session: Some(target.as_str()),
                 ..Default::default()
             };
+            println!("yeah, alright, target: {:?}", target);
             let mut tmux = TmuxInterface::new();
             return tmux.switch_client(Some(&select));
         } else {
@@ -335,7 +325,6 @@ impl Window {
         }
     }
 
-    #[allow(dead_code)]
     pub fn initial_command(&mut self, commands: Commands) {
         for (pane, command) in commands {
             if let Some(pane) = self.get_pane(pane) {
@@ -351,16 +340,14 @@ impl Window {
         }
     }
 
-    #[allow(dead_code)]
     fn reload_panes(&mut self) {
-        let target = format!("{}:{}.0", self.session_name, self.name);
+        let target = target(self.session_name.as_str(), self.name.as_str(), 0);
         let panes = tmux_interface::Panes::get(target.as_str(), PANE_ALL).unwrap();
         self.panes =
             Pane::from_interface_list(panes, self.session_name.as_str(), self.name.as_str());
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 struct Pane {
     session_name: String,
@@ -369,7 +356,6 @@ struct Pane {
 }
 
 impl Pane {
-    #[allow(dead_code)]
     pub fn send_keys(&self, keys: Vec<&str>) -> Result<Output, tmux_interface::Error> {
         Tmux::send_keys(
             self.session_name.as_str(),
@@ -379,7 +365,6 @@ impl Pane {
         )
     }
 
-    #[allow(dead_code)]
     pub fn from_interface_list(
         panes: tmux_interface::Panes,
         session_name: &str,
@@ -391,7 +376,6 @@ impl Pane {
             .collect()
     }
 
-    #[allow(dead_code)]
     pub fn from_interface(
         interface: tmux_interface::Pane,
         session_name: &str,
