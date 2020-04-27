@@ -3,7 +3,7 @@
 ### new names definitely being considered
 
 ## Installation 
-MacOs 
+macOS 
 ```
 brew tap zdcthomas/tools
 brew install dmux
