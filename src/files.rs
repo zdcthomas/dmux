@@ -10,7 +10,6 @@ fn is_git_dir(entry: &DirEntry) -> bool {
 }
 
 pub fn all_dirs_in_path(search_dir: PathBuf) -> String {
-    // let home = dirs::home_dir().unwrap();
     let mut path_input = String::new();
     for entry in WalkDir::new(search_dir)
         .max_depth(4)

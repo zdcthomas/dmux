@@ -1,6 +1,11 @@
 extern crate clap;
+extern crate config;
 extern crate dirs;
 extern crate interactor;
+
+#[macro_use]
+extern crate serde_derive;
+
 extern crate tmux_interface;
 extern crate url;
 extern crate walkdir;
@@ -59,26 +64,48 @@ fn path_to_window_name(path: &Path) -> &str {
         .unwrap()
 }
 
+#[derive(Deserialize)]
+struct Config {
+    layout: Option<String>,
+    session_name: Option<String>,
+    number_of_panes: Option<i32>,
+}
+
 fn main() {
-    let matches = args();
+    let mut settings = config::Config::default();
 
-    let session_name = matches
-        .value_of("session")
-        .unwrap_or(default_session_name());
+    let mut search_dir = dirs::home_dir().unwrap();
+    search_dir.push("config/dmux/conf");
+    println!("{:?}", search_dir.to_str());
+    settings
+        // Add in `./Settings.toml`
+        .merge(config::File::from(search_dir))
+        .unwrap()
+        // Add in settings from the environment (with a prefix of APP)
+        // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
+        .merge(config::Environment::with_prefix("DMUX"))
+        .unwrap();
+    let foo = settings.try_into::<Config>().unwrap();
+    println!("{:?}", foo.layout);
+    println!("{:?}", foo.session_name);
 
-    let number_of_panes = matches
+    let args = args();
+
+    let session_name = args.value_of("session").unwrap_or(default_session_name());
+
+    let number_of_panes = args
         .value_of("number_of_panes")
         .unwrap_or("2")
         .parse::<i32>()
         .expect("provided number of panes not a valid number");
 
-    let layout = matches
+    let layout = args
         .value_of("layout")
         .unwrap_or(tmux::default_layout_checksum());
 
     let search_dir = dirs::home_dir().unwrap();
 
-    match matches.subcommand_name() {
+    match args.subcommand_name() {
         None => {
             if let Some(selected_dir) = Selector::new(search_dir).select_dir() {
                 setup_workspace(selected_dir, number_of_panes, layout, session_name)
@@ -86,7 +113,7 @@ fn main() {
         }
 
         Some("clone") => {
-            let clone = matches.subcommand_matches("clone").unwrap();
+            let clone = args.subcommand_matches("clone").unwrap();
             let repo = clone
                 .value_of("repo")
                 .expect("No repo specified, what should I clone?");
