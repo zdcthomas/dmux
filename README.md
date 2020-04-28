@@ -19,6 +19,8 @@ brew install dmux
 - [ ] Subcommand to describe current layout
 - [ ] Args for command/pane pairs
 - [ ] Args for layout string
+- [ ] Config/Arg for dir search command
+- [ ] Config/Arg for dir search depth
 
 ## Bugs
 #### please submit bugs as issues and I'll add them here

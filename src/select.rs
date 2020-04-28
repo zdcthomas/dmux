@@ -45,16 +45,18 @@ fn output_to_string(output: Output) -> Option<String> {
 impl Selector {
     pub fn new(search_dir: PathBuf) -> Selector {
         let files = all_dirs_in_path(search_dir);
-        return Selector { files: files };
+        return Selector { files };
     }
 
     pub fn select_dir(&self) -> Option<String> {
-        let mut fzf = Command::new("fzf")
+        let mut fzf = Command::new("fzf-tmux")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
             .unwrap();
 
+        // this should be converted to an async stream so that
+        // selection doesn't have to wait for dir traversal
         fzf.stdin
             .as_mut()
             .unwrap()
