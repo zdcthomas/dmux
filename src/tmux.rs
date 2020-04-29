@@ -24,14 +24,14 @@ fn target(session_name: &str, window_name: &str, pane: i32) -> String {
     )
 }
 
-// name's like `coc.nvim` break tmux's target conventions
+// tmux's target conventions `sess:wind.pane` break when `wind` has a value like `coc.nvim`
 // once again, tmux is kinda annoying
 fn clean_for_target(string: &str) -> String {
     let re = Regex::new(r"\.").unwrap();
     re.replace_all(string, "-").into_owned()
 }
 
-// make these into String
+// make these into String instead of str
 pub struct WorkSpace<'a> {
     pub session_name: &'a str,
     pub window_name: &'a str,
@@ -44,6 +44,7 @@ pub fn default_layout_checksum<'a>() -> &'a str {
     "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"
 }
 
+// Make this a result type around Tmux
 pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
     let mut tmux = Tmux::new();
     let to_be_deleted: Option<String>;
@@ -135,6 +136,7 @@ pub struct Session {
     name: String,
 }
 
+// break this out into it's own module / file
 impl Session {
     pub fn remove_window(&mut self, window_name: &str) -> Result<Output, tmux_interface::Error> {
         TmuxInterface::new().kill_window(Some(false), Some(self.target(window_name, 0).as_str()))
@@ -312,7 +314,6 @@ impl Window {
                 target_session: Some(target.as_str()),
                 ..Default::default()
             };
-            println!("yeah, alright, target: {:?}", target);
             let mut tmux = TmuxInterface::new();
             return tmux.switch_client(Some(&select));
         } else {
@@ -325,17 +326,17 @@ impl Window {
         }
     }
 
+    // make this return a result
     pub fn initial_command(&mut self, commands: Commands) {
         for (pane, command) in commands {
             if let Some(pane) = self.get_pane(pane) {
                 pane.send_keys(vec![command.as_str(), "Enter"])
                     .expect("could not send command");
             } else {
-                println!("pane {} not found", pane);
-                println!(
-                    "available panes in window {:?} are: {:?}",
-                    self.name, self.panes
-                );
+                // println!(
+                //     "available panes in window {:?} are: {:?}",
+                //     self.name, self.panes
+                // );
             }
         }
     }
@@ -393,23 +394,12 @@ impl Pane {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_new() {
-        let layout = Layout {
-            window_count: 2,
-            layout_checksum: String::from("34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"),
-        };
-
-        let mut commands = HashMap::new();
-        commands.insert(0, String::from("nvim"));
-        commands.insert(1, String::from("echo yo"));
-
-        setup_workspace(WorkSpace {
-            session_name: "dev",
-            window_name: "toskr",
-            dir: "/Users/zacharythomas/dev/Toskr/",
-            layout,
-            commands,
-        });
-    }
+    // #[test]
+    // fn test_layout_cell_count() {
+    //     let cs = "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}";
+    //     // let cs = "178x64,1,2[177x32,3,4{88x32,5,6,1,44x32,89,7,4,43x32,134,8,5},177x31,1,33{88x31,0,33,2,88x31,89,33,3}]";
+    //     let layout_cell: tmux_interface::LayoutCell = cs.parse().unwrap();
+    //     let count = number_of_cells(&layout_cell);
+    //     assert_eq!(count, 4);
+    // }
 }
