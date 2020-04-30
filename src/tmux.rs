@@ -228,6 +228,7 @@ pub struct Layout {
     pub layout_checksum: String,
 }
 
+#[derive()]
 pub type Commands = HashMap<i32, String>;
 
 pub struct Window {

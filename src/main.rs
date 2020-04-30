@@ -28,7 +28,6 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         .version("0.1.2")
         .author("Zdcthomas")
         .about("a nicer way to open up tmux 'workspaces'")
-        .arg(Arg::with_name("repo").help("clones a repo from a git remote"))
         .arg(
             Arg::with_name("session_name")
                 .short("s")
@@ -82,6 +81,7 @@ struct Config {
     session_name: String,
     number_of_panes: i32,
     search_dir: PathBuf,
+    commands: tmux::Commands,
 }
 
 fn default_layout_checksum() -> String {
@@ -90,9 +90,13 @@ fn default_layout_checksum() -> String {
 
 fn config_settings(settings: &mut config::Config) -> config::Config {
     let mut config_conf = dirs::config_dir().unwrap();
-    config_conf.push("dmux.conf.xxxx");
+    config_conf.push("dmux/dmux.conf.xxxx");
+
     let mut home_conf = dirs::home_dir().unwrap();
     home_conf.push(".dmux.conf.xxxx");
+
+    let mut mac_config = dirs::home_dir().unwrap();
+    mac_config.push(".config/dmux/dmux.conf.xxx");
     settings
         // ~/dmux.conf.(yaml | json | toml)
         .merge(config::File::with_name(config_conf.to_str().unwrap()).required(false))
@@ -100,30 +104,36 @@ fn config_settings(settings: &mut config::Config) -> config::Config {
         // ~/{xdg_config|.config}dmux.conf.(yaml | json | toml)
         .merge(config::File::with_name(home_conf.to_str().unwrap()).required(false))
         .unwrap()
+        .merge(config::File::with_name(mac_config.to_str().unwrap()).required(false))
+        .unwrap()
         // Add in settings from the environment (with a prefix of DMUX)
         // Eg.. `DMUX_SESSION_NAME=foo dmux` would set the `session_name` key
         .merge(config::Environment::with_prefix("DMUX"))
         .unwrap()
         .to_owned()
 }
+fn default_commands() -> tmux::Commands {
+    let mut commands = HashMap::new();
+    commands.insert(0, String::from("vim"));
+    commands.insert(1, String::from("ls -la"));
+    commands
+}
 
 fn setup_workspace(selected_dir: String, config: Config) {
+    // lol this is totally unnecessary now
+    // it feels like I should just pass in a PathBuf
     let path = Path::new(selected_dir.as_str());
     let layout = Layout {
-        window_count: config.number_of_panes,
         layout_checksum: String::from(config.layout),
+        window_count: config.number_of_panes,
     };
 
-    let mut commands = HashMap::new();
-    commands.insert(0, String::from("nvim"));
-    commands.insert(1, String::from("fish"));
-
     let workspaces = WorkSpace {
-        session_name: config.session_name,
-        window_name: path_to_window_name(path).to_string(),
+        commands: config.commands,
         dir: String::from(path.to_str().unwrap()),
         layout,
-        commands,
+        session_name: config.session_name,
+        window_name: path_to_window_name(path).to_string(),
     };
     tmux::setup_workspace(workspaces);
 }
@@ -155,7 +165,8 @@ fn main() {
             .value_of("number_of_panes")
             .unwrap_or(
                 settings
-                    // Ok Ok Ok yeah, I know, please tell me how to get ArgMatch::value_of to parse into a value and then I won't have to do this
+                    // Ok Ok Ok yeah, I know, please tell me how to get ArgMatch::value_of to parse
+                    // into a value and then I won't have to do this
                     .get::<i32>("number_of_panes")
                     .unwrap_or(2)
                     .to_string()
@@ -163,6 +174,11 @@ fn main() {
             )
             .parse::<i32>()
             .expect("invalid number given"),
+        // I don't know if it makes sense to have commands be a cli arg so right now, it's just
+        // parsed from the config files/env
+        commands: settings
+            .get::<tmux::Commands>("commands")
+            .unwrap_or(default_commands()),
         search_dir: dirs::home_dir().unwrap(),
     };
 
