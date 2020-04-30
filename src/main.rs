@@ -25,7 +25,7 @@ use url::Url;
 
 fn args<'a>() -> clap::ArgMatches<'a> {
     App::new("DMUX")
-        .version("0.1.2")
+        .version("0.2.0")
         .author("Zdcthomas")
         .about("a nicer way to open up tmux 'workspaces'")
         .arg(
