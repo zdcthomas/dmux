@@ -32,16 +32,16 @@ fn clean_for_target(string: &str) -> String {
 }
 
 // make these into String instead of str
-pub struct WorkSpace<'a> {
-    pub session_name: &'a str,
-    pub window_name: &'a str,
-    pub dir: &'a str,
+pub struct WorkSpace {
+    pub session_name: String,
+    pub window_name: String,
+    pub dir: String,
     pub layout: Layout,
     pub commands: Commands,
 }
 
-pub fn default_layout_checksum<'a>() -> &'a str {
-    "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}"
+pub fn default_layout_checksum() -> String {
+    "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}".to_string()
 }
 
 // Make this a result type around Tmux
@@ -50,12 +50,12 @@ pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
     let to_be_deleted: Option<String>;
     let session: &mut Session;
 
-    if let Some(sess) = tmux.find_session(workspace.session_name) {
+    if let Some(sess) = tmux.find_session(workspace.session_name.as_str()) {
         to_be_deleted = None;
         session = sess;
     } else {
         session = tmux
-            .create_session(workspace.session_name)
+            .create_session(workspace.session_name.as_str())
             .expect("could not create session");
 
         let deletion = session.windows.first().unwrap().name.clone();
@@ -147,16 +147,16 @@ impl Session {
     }
 
     pub fn setup_workspace(&mut self, workspace: WorkSpace) -> &mut Window {
-        if self.has_window(workspace.window_name) {
+        if self.has_window(workspace.window_name.as_str()) {
             return self
-                .find_window(workspace.window_name)
+                .find_window(workspace.window_name.as_str())
                 .expect("window destroyed during operation");
         }
         let window = self
-            .create_window(workspace.window_name, workspace.dir)
+            .create_window(workspace.window_name.as_str(), workspace.dir.as_str())
             .expect("could not create window");
         window
-            .setup_layout(workspace.layout, workspace.dir)
+            .setup_layout(workspace.layout, workspace.dir.as_str())
             .unwrap();
         window.initial_command(workspace.commands);
         return window;

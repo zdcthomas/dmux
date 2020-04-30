@@ -11,7 +11,7 @@ fn is_git_dir(entry: &DirEntry) -> bool {
     }
 }
 
-fn all_dirs_in_path(search_dir: PathBuf) -> String {
+fn all_dirs_in_path(search_dir: &PathBuf) -> String {
     // let home = dirs::home_dir().unwrap();
     let mut path_input = String::new();
     for entry in WalkDir::new(search_dir)
@@ -43,7 +43,7 @@ fn output_to_string(output: Output) -> Option<String> {
 }
 
 impl Selector {
-    pub fn new(search_dir: PathBuf) -> Selector {
+    pub fn new(search_dir: &PathBuf) -> Selector {
         let files = all_dirs_in_path(search_dir);
         return Selector { files };
     }
