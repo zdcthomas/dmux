@@ -32,11 +32,13 @@ pub struct Selector {
     files: String,
 }
 
-fn output_to_string(output: Output) -> Option<String> {
+fn output_to_pathbuf(output: Output) -> Option<PathBuf> {
     if output.status.success() {
-        let mut stdout = String::from_utf8(output.stdout).unwrap();
+        let mut stdout = output.stdout;
+        // removes trailing newline
         stdout.pop();
-        return Some(stdout);
+        let path: PathBuf = String::from_utf8(stdout).unwrap().parse().unwrap();
+        return Some(path);
     } else {
         return None;
     }
@@ -48,7 +50,7 @@ impl Selector {
         return Selector { files };
     }
 
-    pub fn select_dir(&self) -> Option<String> {
+    pub fn select_dir(&self) -> Option<PathBuf> {
         let mut fzf = Command::new("fzf-tmux")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -64,6 +66,7 @@ impl Selector {
             .unwrap();
 
         let output = fzf.wait_with_output().unwrap();
-        return output_to_string(output);
+
+        return output_to_pathbuf(output);
     }
 }

@@ -27,7 +27,7 @@ fn target(session_name: &str, window_name: &str, pane: i32) -> String {
 // tmux's target conventions `sess:wind.pane` break when `wind` has a value like `coc.nvim`
 // once again, tmux is kinda annoying
 fn clean_for_target(string: &str) -> String {
-    let re = Regex::new(r"\.").unwrap();
+    let re = Regex::new(r"[\.\s]").unwrap();
     re.replace_all(string, "-").into_owned()
 }
 
@@ -40,6 +40,7 @@ pub struct WorkSpace {
     pub commands: Commands,
 }
 
+#[allow(dead_code)]
 pub fn default_layout_checksum() -> String {
     "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}".to_string()
 }
@@ -225,10 +226,9 @@ impl Session {
 pub struct Layout {
     // I wouldn't need two things here if I could just parse the tmux layout checksum
     pub window_count: i32,
-    pub layout_checksum: String,
+    pub layout_string: String,
 }
 
-#[derive()]
 pub type Commands = HashMap<i32, String>;
 
 pub struct Window {
@@ -289,6 +289,8 @@ impl Window {
         layout: Layout,
         dir: &str,
     ) -> Result<Output, tmux_interface::Error> {
+        // let lay = layout.layout_string.parse::<tmux_interface::Layout>();
+
         self.reload_panes();
         if self.number_of_panes < layout.window_count {
             for _x in self.number_of_panes..layout.window_count {
@@ -298,7 +300,7 @@ impl Window {
         let tmux_command = format!(
             "tmux select-layout -t {} \"{}\"",
             self.target(0),
-            layout.layout_checksum
+            layout.layout_string
         );
         self.reload_panes();
         self.send_keys(vec![tmux_command.as_str(), "Enter"])
@@ -389,18 +391,4 @@ impl Pane {
             window_name: window_name.to_string(),
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // #[test]
-    // fn test_layout_cell_count() {
-    //     let cs = "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}";
-    //     // let cs = "178x64,1,2[177x32,3,4{88x32,5,6,1,44x32,89,7,4,43x32,134,8,5},177x31,1,33{88x31,0,33,2,88x31,89,33,3}]";
-    //     let layout_cell: tmux_interface::LayoutCell = cs.parse().unwrap();
-    //     let count = number_of_cells(&layout_cell);
-    //     assert_eq!(count, 4);
-    // }
 }

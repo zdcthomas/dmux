@@ -39,6 +39,7 @@ number_of_panes = 5
 - [ ] Subcommand to describe current layout
 - [ ] Config/Arg for dir search command
 - [ ] Config/Arg for dir search depth
+- [ ] Profiles in config that represent sets of configuration, maybe accessed using `-p fe_profile` etc.
 
 ## Bugs
 #### please submit bugs as issues and I'll add them here

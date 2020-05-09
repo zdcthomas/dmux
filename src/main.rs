@@ -13,7 +13,7 @@ extern crate walkdir;
 mod select;
 mod tmux;
 
-use clap::{App, Arg, SubCommand};
+use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg, SubCommand};
 use regex::Regex;
 use select::Selector;
 use std::collections::HashMap;
@@ -24,10 +24,10 @@ use url::Url;
 // use std::env;
 
 fn args<'a>() -> clap::ArgMatches<'a> {
-    App::new("DMUX")
-        .version("0.2.0")
-        .author("Zdcthomas")
-        .about("a nicer way to open up tmux 'workspaces'")
+    App::new(crate_name!())
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about(crate_description!())
         .arg(
             Arg::with_name("session_name")
                 .short("s")
@@ -119,21 +119,22 @@ fn default_commands() -> tmux::Commands {
     commands
 }
 
-fn setup_workspace(selected_dir: String, config: Config) {
-    // lol this is totally unnecessary now
-    // it feels like I should just pass in a PathBuf
-    let path = Path::new(selected_dir.as_str());
+fn setup_workspace(selected_dir: PathBuf, config: Config) {
+    // println!("{:?}", config.layout);
+    // dbg!(config.layout.parse::<tmux_interface::LayoutCell>());
+    // let foo = tmux_interface::TmuxInterface::new().list_windows(Some(true), None, None);
+    // print!("list_windows: {:?}", foo.unwrap());
+
     let layout = Layout {
-        layout_checksum: String::from(config.layout),
+        layout_string: config.layout,
         window_count: config.number_of_panes,
     };
-
     let workspaces = WorkSpace {
         commands: config.commands,
-        dir: String::from(path.to_str().unwrap()),
+        dir: String::from(dbg!(selected_dir.to_str().unwrap())),
         layout,
         session_name: config.session_name,
-        window_name: path_to_window_name(path).to_string(),
+        window_name: path_to_window_name(&selected_dir).to_string(),
     };
     tmux::setup_workspace(workspaces);
 }
@@ -190,17 +191,17 @@ fn main() {
         }
 
         Some("clone") => {
-            let clone = args.subcommand_matches("clone").unwrap();
-            let repo = clone
+            let clone_args = args.subcommand_matches("clone").unwrap();
+            let repo_url = clone_args
                 .value_of("repo")
                 .expect("No repo specified, what should I clone?");
-            let dir: String;
-            if let Some(t) = clone.value_of("target_dir") {
-                let target_dir = Path::new(t);
-                dir = clone_from(repo, &target_dir);
+            let dir: PathBuf;
+            if let Some(t) = clone_args.value_of("target_dir") {
+                let target_dir = PathBuf::from(t);
+                dir = clone_from(repo_url, target_dir);
             } else {
                 let target_dir = dirs::home_dir().unwrap();
-                dir = clone_from(repo, &target_dir);
+                dir = clone_from(repo_url, target_dir);
             }
             setup_workspace(dir, config)
         }
@@ -216,25 +217,22 @@ fn git_url_to_dir_name(url: &Url) -> String {
     re.replace_all(segments.last().unwrap(), "").into_owned()
 }
 
-fn clone_from(repo: &str, target_dir: &Path) -> String {
+fn clone_from(repo: &str, target_dir: PathBuf) -> PathBuf {
     if let Ok(url) = Url::parse(repo) {
         let dir_name = git_url_to_dir_name(&url);
-        let target = target_dir.clone().join(dir_name.clone());
-        let target_string = target.to_str().expect("couldn't make remote into dir");
+        let target = target_dir.join(dir_name);
         if !target.exists() {
             Command::new("git")
                 .arg("clone")
                 .arg(url.as_str())
-                .arg(target_string)
+                .arg(target.to_str().expect("couldn't make remote into dir"))
                 .stdout(Stdio::inherit())
                 .output()
                 .expect("could not clone");
-        } else {
         }
-        return target_string.to_owned();
-    } else {
-        panic!("Ooopsie Whoopsie, {} isn't a valid url!", repo);
+        return target;
     }
+    panic!("Sorry, {} isn't a valid url!", repo);
 }
 
 fn path_to_window_name(path: &Path) -> String {
