@@ -1,6 +1,5 @@
 extern crate tmux_interface;
 use regex::Regex;
-use std::collections::HashMap;
 use std::process::Output;
 use std::result::Result;
 use tmux_interface::pane::PANE_ALL;

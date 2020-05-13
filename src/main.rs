@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate clap;
 extern crate config;
 extern crate dirs;
@@ -20,7 +19,6 @@ use clap::{
 };
 use regex::Regex;
 use select::Selector;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tmux::{Layout, WorkSpace};
