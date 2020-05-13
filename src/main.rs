@@ -30,6 +30,11 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         .author(crate_authors!())
         .about(crate_description!())
         .arg(
+            Arg::with_name("selected_dir")
+                .help("Instead of opening the selector to pick a dir, open it is the desired dir.")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("session_name")
                 .short("s")
                 .long("session_name")
@@ -218,11 +223,7 @@ fn main() {
     };
 
     match args.subcommand_name() {
-        None => {
-            if let Some(selected_dir) = Selector::new(&config.search_dir).select_dir() {
-                setup_workspace(selected_dir, config)
-            }
-        }
+        None => open_in_selected_dir(args, config),
 
         Some("clone") => {
             let clone_args = args.subcommand_matches("clone").unwrap();
@@ -241,6 +242,18 @@ fn main() {
         }
 
         _ => unreachable!(),
+    }
+}
+
+fn open_in_selected_dir(args: clap::ArgMatches, config: Config) {
+    if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
+        if selected_dir.exists() {
+            setup_workspace(selected_dir, config)
+        } else {
+            panic!("dude, that's not a path")
+        }
+    } else if let Some(selected_dir) = Selector::new(&config.search_dir).select_dir() {
+        setup_workspace(selected_dir, config)
     }
 }
 
