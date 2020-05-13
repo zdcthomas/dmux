@@ -13,15 +13,16 @@ extern crate walkdir;
 mod select;
 mod tmux;
 
-use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg, SubCommand};
+use clap::{
+    crate_authors, crate_description, crate_name, crate_version, value_t, values_t, App, Arg,
+    SubCommand,
+};
 use regex::Regex;
 use select::Selector;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tmux::{Layout, WorkSpace};
 use url::Url;
-// use std::env;
 
 fn args<'a>() -> clap::ArgMatches<'a> {
     App::new(crate_name!())
@@ -31,7 +32,7 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         .arg(
             Arg::with_name("session_name")
                 .short("s")
-                .long("session")
+                .long("session_name")
                 .help("specify a specific session name to run")
                 .takes_value(true),
         )
@@ -43,10 +44,32 @@ fn args<'a>() -> clap::ArgMatches<'a> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("number_of_panes")
+                .short("p")
+                .long("panes")
+                .help("number of panes")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("commands")
+                .short("c")
+                .multiple(true)
+                .long("commands")
+                .help("specify the window layout (layouts are dependent on the window number)")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("layout")
                 .short("l")
                 .long("layout")
                 .help("specify the window layout (layouts are dependent on the window number)")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("profile")
+                .short("P")
+                .long("profile")
+                .help("Use a different configuration profile")
                 .takes_value(true),
         )
         .arg(
@@ -71,24 +94,9 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         .get_matches()
 }
 
-fn default_session_name() -> String {
-    "dev".to_string()
-}
-
-#[derive(Deserialize, Default, Debug)]
-struct Config {
-    layout: String,
-    session_name: String,
-    number_of_panes: i32,
-    search_dir: PathBuf,
-    commands: tmux::Commands,
-}
-
-fn default_layout_checksum() -> String {
-    "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}".to_string()
-}
-
-fn config_settings(settings: &mut config::Config) -> config::Config {
+fn config_settings() -> config::Config {
+    let default = Config::default();
+    let mut settings = config::Config::default();
     let mut config_conf = dirs::config_dir().unwrap();
     config_conf.push("dmux/dmux.conf.xxxx");
 
@@ -110,21 +118,65 @@ fn config_settings(settings: &mut config::Config) -> config::Config {
         // Eg.. `DMUX_SESSION_NAME=foo dmux` would set the `session_name` key
         .merge(config::Environment::with_prefix("DMUX"))
         .unwrap()
+        .set_default("layout", default.layout)
+        .unwrap()
+        // the trait `std::convert::From<i32>` is not implemented for `config::value::ValueKind`
+        .set_default("number_of_panes", default.number_of_panes as i64)
+        .unwrap()
+        .set_default("commands", default.commands)
+        .unwrap()
+        .set_default("session_name", default.session_name)
+        .unwrap()
         .to_owned()
 }
+
+// I don't like the repetition here
+#[derive(Deserialize, Debug)]
+struct Config {
+    #[serde(default = "default_layout_checksum")]
+    layout: String,
+    #[serde(default = "default_session_name")]
+    session_name: String,
+    #[serde(default = "default_number_of_panes")]
+    number_of_panes: i32,
+    #[serde(default = "default_search_dir")]
+    search_dir: PathBuf,
+    #[serde(default = "default_commands")]
+    commands: tmux::Commands,
+}
+
+fn default_search_dir() -> PathBuf {
+    dirs::home_dir().unwrap()
+}
+fn default_layout_checksum() -> String {
+    "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}".to_string()
+}
+
+fn default_session_name() -> String {
+    "dev".to_string()
+}
+
+fn default_number_of_panes() -> i32 {
+    2
+}
+
 fn default_commands() -> tmux::Commands {
-    let mut commands = HashMap::new();
-    commands.insert(0, String::from("vim"));
-    commands.insert(1, String::from("ls -la"));
-    commands
+    vec![String::from("vim"), String::from("ls")]
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            layout: default_layout_checksum(),
+            session_name: default_session_name(),
+            number_of_panes: default_number_of_panes(),
+            search_dir: dirs::home_dir().unwrap(),
+            commands: default_commands(),
+        }
+    }
 }
 
 fn setup_workspace(selected_dir: PathBuf, config: Config) {
-    // println!("{:?}", config.layout);
-    // dbg!(config.layout.parse::<tmux_interface::LayoutCell>());
-    // let foo = tmux_interface::TmuxInterface::new().list_windows(Some(true), None, None);
-    // print!("list_windows: {:?}", foo.unwrap());
-
     let layout = Layout {
         layout_string: config.layout,
         window_count: config.number_of_panes,
@@ -139,48 +191,30 @@ fn setup_workspace(selected_dir: PathBuf, config: Config) {
     tmux::setup_workspace(workspaces);
 }
 
+fn settings_config(settings: config::Config, target: Option<&str>) -> Config {
+    if let Some(target) = target {
+        let profile: Config = settings.get(target).unwrap();
+        return profile;
+    }
+    let profile: Config = settings.try_into().unwrap();
+    return profile;
+}
+
 fn main() {
-    let settings = config_settings(&mut config::Config::default());
+    let settings = config_settings();
     let args = args();
+    let conf_from_settings = settings_config(settings, args.value_of("profile"));
 
     let config = Config {
-        session_name: args
-            .value_of("session")
-            .unwrap_or(
-                settings
-                    .get::<String>("session_name")
-                    .unwrap_or(default_session_name())
-                    .as_str(),
-            )
-            .to_string(),
-        layout: args
-            .value_of("layout")
-            .unwrap_or(
-                settings
-                    .get::<String>("layout")
-                    .unwrap_or(default_layout_checksum())
-                    .as_str(),
-            )
-            .to_string(),
-        number_of_panes: args
-            .value_of("number_of_panes")
-            .unwrap_or(
-                settings
-                    // Ok Ok Ok yeah, I know, please tell me how to get ArgMatch::value_of to parse
-                    // into a value and then I won't have to do this
-                    .get::<i32>("number_of_panes")
-                    .unwrap_or(2)
-                    .to_string()
-                    .as_str(),
-            )
-            .parse::<i32>()
-            .expect("invalid number given"),
-        // I don't know if it makes sense to have commands be a cli arg so right now, it's just
-        // parsed from the config files/env
-        commands: settings
-            .get::<tmux::Commands>("commands")
-            .unwrap_or(default_commands()),
-        search_dir: dirs::home_dir().unwrap(),
+        session_name: value_t!(args.value_of("session_name"), String)
+            .unwrap_or(conf_from_settings.session_name),
+        layout: value_t!(args.value_of("layout"), String).unwrap_or(conf_from_settings.layout),
+        number_of_panes: value_t!(args.value_of("number_of_panes"), i32)
+            .unwrap_or(conf_from_settings.number_of_panes),
+        commands: values_t!(args.values_of("commands"), String)
+            .unwrap_or(conf_from_settings.commands),
+        search_dir: value_t!(args.value_of("search_dir"), PathBuf)
+            .unwrap_or(conf_from_settings.search_dir),
     };
 
     match args.subcommand_name() {

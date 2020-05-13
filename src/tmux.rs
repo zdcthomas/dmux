@@ -1,6 +1,5 @@
 extern crate tmux_interface;
 use regex::Regex;
-use std::collections::HashMap;
 use std::process::Output;
 use std::result::Result;
 use tmux_interface::pane::PANE_ALL;
@@ -229,7 +228,7 @@ pub struct Layout {
     pub layout_string: String,
 }
 
-pub type Commands = HashMap<i32, String>;
+pub type Commands = Vec<String>;
 
 pub struct Window {
     panes: Vec<Pane>,
@@ -331,8 +330,8 @@ impl Window {
 
     // make this return a result
     pub fn initial_command(&mut self, commands: Commands) {
-        for (pane, command) in commands {
-            if let Some(pane) = self.get_pane(pane) {
+        for (pane, command) in commands.iter().enumerate() {
+            if let Some(pane) = self.get_pane(pane as i32) {
                 pane.send_keys(vec![command.as_str(), "Enter"])
                     .expect("could not send command");
             } else {
