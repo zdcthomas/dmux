@@ -183,7 +183,7 @@ fn setup_workspace(selected_dir: PathBuf, config: Config) {
     };
     let workspaces = WorkSpace {
         commands: config.commands,
-        dir: String::from(dbg!(selected_dir.to_str().unwrap())),
+        dir: String::from(selected_dir.to_str().unwrap()),
         layout,
         session_name: config.session_name,
         window_name: path_to_window_name(&selected_dir).to_string(),
