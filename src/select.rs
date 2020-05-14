@@ -29,7 +29,8 @@ fn all_dirs_in_path(search_dir: &PathBuf) -> String {
 
 // SELECTOR
 pub struct Selector {
-    files: String,
+    search_dir: PathBuf,
+    use_fd: bool,
 }
 
 fn output_to_pathbuf(output: Output) -> Option<PathBuf> {
@@ -45,12 +46,44 @@ fn output_to_pathbuf(output: Output) -> Option<PathBuf> {
 }
 
 impl Selector {
-    pub fn new(search_dir: &PathBuf) -> Selector {
-        let files = all_dirs_in_path(search_dir);
-        return Selector { files };
+    pub fn new(search_dir: PathBuf) -> Selector {
+        let mut use_fd = false;
+        if let Ok(_) = Command::new("fd")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .spawn()
+        {
+            use_fd = true;
+        }
+        return Selector { search_dir, use_fd };
     }
 
-    pub fn select_dir(&self) -> Option<PathBuf> {
+    fn select_with_fd(&self) -> Option<PathBuf> {
+        let mut fd = Command::new("fd")
+            .arg("-td")
+            .arg(".")
+            .arg(
+                self.search_dir
+                    .to_str()
+                    .expect("couldn't make search dir a string"),
+            )
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("fd failed unexpectedly");
+
+        let pipe = fd.stdout.take().unwrap();
+        let fzf = Command::new("fzf-tmux")
+            .stdin(pipe)
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let output = fzf.wait_with_output().expect("fzf failed unexpectedly");
+        fd.kill().expect("could not kill fd process");
+        return output_to_pathbuf(output);
+    }
+
+    fn select_with_walk_dir(&self) -> Option<PathBuf> {
+        let files = all_dirs_in_path(&self.search_dir);
         let mut fzf = Command::new("fzf-tmux")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -62,11 +95,19 @@ impl Selector {
         fzf.stdin
             .as_mut()
             .unwrap()
-            .write_all(self.files.as_bytes())
+            .write_all(files.as_bytes())
             .unwrap();
 
         let output = fzf.wait_with_output().unwrap();
 
         return output_to_pathbuf(output);
+    }
+
+    pub fn select_dir(&self) -> Option<PathBuf> {
+        if self.use_fd {
+            self.select_with_fd()
+        } else {
+            self.select_with_walk_dir()
+        }
     }
 }

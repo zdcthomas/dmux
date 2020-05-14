@@ -1,7 +1,6 @@
 extern crate clap;
 extern crate config;
 extern crate dirs;
-extern crate interactor;
 
 #[macro_use]
 extern crate serde_derive;
@@ -252,7 +251,7 @@ fn open_in_selected_dir(args: clap::ArgMatches, config: Config) {
         } else {
             panic!("dude, that's not a path")
         }
-    } else if let Some(selected_dir) = Selector::new(&config.search_dir).select_dir() {
+    } else if let Some(selected_dir) = Selector::new(config.search_dir.clone()).select_dir() {
         setup_workspace(selected_dir, config)
     }
 }
