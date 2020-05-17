@@ -252,7 +252,7 @@ fn main() {
 fn open_in_selected_dir(args: clap::ArgMatches, config: Config) {
     if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
         setup_workspace(selected_dir, config)
-    } else if grep_cli::is_readable_stdin() {
+    } else if grep_cli::is_readable_stdin() && !grep_cli::is_tty_stdin() {
         let selected_dir = PathBuf::from(read_line_iter());
         setup_workspace(selected_dir, config)
     } else if let Some(selected_dir) = Selector::new(config.search_dir.clone()).select_dir() {
