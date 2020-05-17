@@ -10,9 +10,10 @@ brew install dmux
 ```
 
 ## Usage
-* `dmux` alone will use `fzf` to open up a list of dirs in `~`.
-* `dmux <path>` will open the workspace in the provided path
+* `dmux <path>` or `<path> | dmux` will open the workspace in the provided path
+* `dmux` alone will use `fzf` to open up a list of dirs in `~`. This is equivalent to saying `fd -td . ~/ | fzf | dmux`
 * `dmux --help` for more information
+
 
 ## Configuration
 Dmux's configuration tries to be very inclusive in terms of config file types. Dmux supports 
