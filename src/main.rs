@@ -5,6 +5,7 @@ extern crate dirs;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate grep_cli;
 extern crate tmux_interface;
 extern crate url;
 extern crate walkdir;
@@ -18,6 +19,7 @@ use clap::{
 };
 use regex::Regex;
 use select::Selector;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tmux::{Layout, WorkSpace};
@@ -181,6 +183,9 @@ impl Default for Config {
 }
 
 fn setup_workspace(selected_dir: PathBuf, config: Config) {
+    if !selected_dir.exists() {
+        panic!("dude, that's not a path")
+    }
     let layout = Layout {
         layout_string: config.layout,
         window_count: config.number_of_panes,
@@ -246,14 +251,21 @@ fn main() {
 
 fn open_in_selected_dir(args: clap::ArgMatches, config: Config) {
     if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
-        if selected_dir.exists() {
-            setup_workspace(selected_dir, config)
-        } else {
-            panic!("dude, that's not a path")
-        }
+        setup_workspace(selected_dir, config)
+    } else if grep_cli::is_readable_stdin() {
+        let selected_dir = PathBuf::from(read_line_iter());
+        setup_workspace(selected_dir, config)
     } else if let Some(selected_dir) = Selector::new(config.search_dir.clone()).select_dir() {
         setup_workspace(selected_dir, config)
     }
+}
+
+fn read_line_iter() -> String {
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
+    input.trim().to_string()
 }
 
 // -> Result<Output, Error>
