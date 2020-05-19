@@ -20,7 +20,6 @@ use app::{
     CommandType::{Local, Pull},
     Config,
 };
-use regex::Regex;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tmux::{Layout, WorkSpace};
@@ -69,8 +68,9 @@ fn main() {
 fn git_url_to_dir_name(url: &Url) -> String {
     let segments = url.path_segments().ok_or_else(|| "cannot be base").unwrap();
     // TODO: use str.replace here
-    let re = Regex::new(r"\.git$").unwrap();
-    re.replace_all(segments.last().unwrap(), "").into_owned()
+    // let re = Regex::new(r"\.git$").unwrap();
+    // re.replace_all(segments.last().unwrap(), "").into_owned()
+    segments.last().unwrap().replace(".git", "")
 }
 
 fn clone_from(config: &app::PullConfig) -> PathBuf {

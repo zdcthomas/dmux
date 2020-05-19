@@ -8,17 +8,21 @@ use clap::{
 use select::Selector;
 use std::io;
 use std::path::PathBuf;
+use std::process::Command;
 use url::Url;
 
 fn args<'a>() -> clap::ArgMatches<'a> {
+    let fzf_available = Command::new("fzf").arg("--version").spawn().is_ok();
     App::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
         .arg(
             Arg::with_name("selected_dir")
-                .help("Instead of opening the selector to pick a dir, open it is the desired dir.")
-                .takes_value(true),
+                .help("Open this directory directly without starting a selector")
+                .takes_value(true)
+                // if fzf isn't available, this needs to be specified
+                .required(!fzf_available),
         )
         .arg(
             Arg::with_name("session_name")
@@ -38,7 +42,7 @@ fn args<'a>() -> clap::ArgMatches<'a> {
             Arg::with_name("number_of_panes")
                 .short("p")
                 .long("panes")
-                .help("number of panes")
+                .help("the number of panes to generate.")
                 .takes_value(true),
         )
         .arg(
@@ -46,29 +50,31 @@ fn args<'a>() -> clap::ArgMatches<'a> {
                 .short("c")
                 .multiple(true)
                 .long("commands")
-                .help("specify the window layout (layouts are dependent on the window number)")
+                .help("commands to run in panes")
+                .long_help(commands_long_help().as_str())
                 .takes_value(true),
         )
         .arg(
-            // use validator
+            // We should use validator here
             Arg::with_name("layout")
                 .short("l")
                 .long("layout")
-                .help("specify the window layout (layouts are dependent on the window number)")
+                .help("specify the window layout (layouts are dependent on the number of panes)")
+                .long_help(layout_long_help().as_str())
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("profile")
                 .short("P")
                 .long("profile")
-                .help("Use a different configuration profile")
+                .help("Use a different configuration profile.")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("search_dir")
                 .short("d")
                 .long("dir")
-                .help("override of the dir to select from")
+                .help("override of the dir to select from.")
                 .takes_value(true),
         )
         .subcommand(
@@ -84,6 +90,38 @@ fn args<'a>() -> clap::ArgMatches<'a> {
                 ),
         )
         .get_matches()
+}
+
+fn layout_long_help() -> String {
+    format!(
+        "This string is the same representation that
+tmux itself uses to setup it's own layouts.
+Use `{} layout` to generate the layout string
+for the current tmux configuration. This is
+equivalent to running 
+
+`
+tmux list-windows -F \"#{{window_active}} #{{window_layout}}\" 
+  | grep \"^1\" 
+  | cut -d \" \" -f 2
+`
+ ",
+        crate_name!()
+    )
+}
+
+fn commands_long_help() -> String {
+    format!(
+        "This argument, like it's config file equivalent,
+is a list of commands. These commands will 
+be run in the panes of the tmux window that
+will be opened by {:?}. The commands index 
+(beginning with 0) corresponds to the pane
+id. Pane id's can be found easily with 
+`<prefix >q` in tmux.
+ ",
+        crate_name!()
+    )
 }
 
 // I don't like the repetition here
