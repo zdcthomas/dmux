@@ -5,7 +5,6 @@ use clap::{
     crate_authors, crate_description, crate_name, crate_version, value_t, values_t, App, Arg,
     SubCommand,
 };
-use select::Selector;
 use std::io;
 use std::path::PathBuf;
 use std::process::Command;
@@ -79,7 +78,7 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         )
         .subcommand(
             SubCommand::with_name("clone")
-                .about("clones a git repository")
+                .about("clones a git repository, and then opens a workspace in the repo")
                 .arg(Arg::with_name("repo").help("specifies the repo to clone from"))
                 .arg(
                     Arg::with_name("name")
@@ -136,7 +135,7 @@ pub struct Config {
     #[serde(default = "default_search_dir")]
     pub search_dir: PathBuf,
     #[serde(default = "default_selected_dir")]
-    pub selected_dir: PathBuf,
+    pub selected_dir: Option<PathBuf>,
     #[serde(default = "default_commands")]
     pub commands: Vec<String>,
 }
@@ -148,7 +147,7 @@ impl Default for Config {
             session_name: default_session_name(),
             number_of_panes: default_number_of_panes(),
             search_dir: dirs::home_dir().unwrap(),
-            selected_dir: dirs::home_dir().unwrap(),
+            selected_dir: None,
             commands: default_commands(),
         }
     }
@@ -158,8 +157,8 @@ fn default_search_dir() -> PathBuf {
     dirs::home_dir().unwrap()
 }
 
-fn default_selected_dir() -> PathBuf {
-    dirs::home_dir().unwrap()
+fn default_selected_dir() -> Option<PathBuf> {
+    None
 }
 
 fn default_layout_checksum() -> String {
@@ -242,18 +241,20 @@ fn read_line_iter() -> String {
     input.trim().to_string()
 }
 
-fn select_dir(args: &clap::ArgMatches, search_dir: PathBuf) -> PathBuf {
-    if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
-        selected_dir
+fn select_dir(args: &clap::ArgMatches, search_dir: PathBuf) -> Option<PathBuf> {
+    if let Some("clone") = args.subcommand_name() {
+        None
+    } else if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
+        Some(selected_dir)
 
     // selected_dir: value_t!(args.value_of("selected_dir"), PathBuf)
     //     .unwrap_or(conf_from_settings.selected_dir),
     } else if grep_cli::is_readable_stdin() && !grep_cli::is_tty_stdin() {
-        PathBuf::from(read_line_iter())
-    } else if let Some(selected_dir) = Selector::new(search_dir).select_dir() {
-        selected_dir
+        Some(PathBuf::from(read_line_iter()))
+    // } else if let Some(selected_dir) = Selector::new(search_dir).select_dir() {
+    //     Some(selected_dir)
     } else {
-        panic!("something went very wrong");
+        None
     }
 }
 
@@ -263,6 +264,7 @@ pub fn build_app() -> CommandType {
     let conf_from_settings = settings_config(settings, args.value_of("profile"));
     let search_dir =
         value_t!(args.value_of("search_dir"), PathBuf).unwrap_or(conf_from_settings.search_dir);
+
     let config = Config {
         session_name: value_t!(args.value_of("session_name"), String)
             .unwrap_or(conf_from_settings.session_name),
@@ -274,7 +276,6 @@ pub fn build_app() -> CommandType {
         selected_dir: select_dir(&args, search_dir.clone()),
         search_dir,
     };
-
     match args.subcommand_name() {
         None => CommandType::Local(config),
         Some("clone") => {

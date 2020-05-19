@@ -20,18 +20,19 @@ use app::{
     CommandType::{Local, Pull},
     Config,
 };
+use select::Selector;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tmux::{Layout, WorkSpace};
 use url::Url;
 
-fn setup_workspace(config: Config, maybe_dir: Option<PathBuf>) {
-    let selected_dir: PathBuf;
-    if let Some(dir) = maybe_dir {
-        selected_dir = dir;
-    } else {
-        selected_dir = config.selected_dir;
-    }
+fn setup_workspace(config: Config, selected_dir: PathBuf) {
+    // let selected_dir: PathBuf;
+    // if let Some(dir) = maybe_dir {
+    //     selected_dir = dir;
+    // } else {
+    //     selected_dir = config.selected_dir;
+    // }
 
     // TODO: can i get rid of this? maybe panic earlier
     if !selected_dir.exists() {
@@ -55,11 +56,22 @@ fn main() {
     let command = app::build_app();
 
     match command {
-        Local(config) => setup_workspace(config, None),
+        Local(config) => {
+            let selected_dir: PathBuf;
+            if let Some(dir) = config.selected_dir {
+                selected_dir = dir;
+            } else if let Some(dir) = Selector::new(config.search_dir).select_dir() {
+                selected_dir = dir;
+            } else {
+                panic!()
+            }
+
+            setup_workspace(config, selected_dir)
+        }
 
         Pull(pull_config) => {
             let dir = clone_from(&pull_config);
-            setup_workspace(pull_config.open_config, Some(dir))
+            setup_workspace(pull_config.open_config, dir)
         }
     }
 }
