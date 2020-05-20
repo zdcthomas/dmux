@@ -12,7 +12,6 @@ extern crate url;
 extern crate walkdir;
 
 mod app;
-// if this isn't pub the compiler yells at me about dead code, which confuses me greatly
 mod select;
 mod tmux;
 
@@ -33,10 +32,10 @@ fn setup_workspace(config: Config, maybe_dir: Option<PathBuf>) {
     } else if let Some(dir) = config.selected_dir {
         selected_dir = dir;
     } else {
-        panic!("something went super wrong");
+        panic!("No dir was findable");
     }
 
-    // TODO: can i get rid of this? maybe panic earlier
+    // TODO: can i get rid of this? Put this in a validator?
     if !selected_dir.exists() {
         panic!("dude, that's not a path")
     }
@@ -79,8 +78,6 @@ fn main() {
 fn git_url_to_dir_name(url: &Url) -> String {
     let segments = url.path_segments().ok_or_else(|| "cannot be base").unwrap();
     // TODO: use str.replace here
-    // let re = Regex::new(r"\.git$").unwrap();
-    // re.replace_all(segments.last().unwrap(), "").into_owned()
     segments.last().unwrap().replace(".git", "")
 }
 
