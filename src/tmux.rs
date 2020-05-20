@@ -30,7 +30,6 @@ fn clean_for_target(string: &str) -> String {
     re.replace_all(string, "-").into_owned()
 }
 
-// make these into String instead of str
 pub struct WorkSpace {
     pub session_name: String,
     pub window_name: String,
@@ -159,7 +158,7 @@ impl Session {
             .setup_layout(workspace.layout, workspace.dir.as_str())
             .unwrap();
         window.initial_command(workspace.commands);
-        return window;
+        window
     }
 
     pub fn all_sessions() -> Vec<Session> {
@@ -168,10 +167,7 @@ impl Session {
     }
 
     pub fn from_interface_list(sessions: tmux_interface::Sessions) -> Vec<Session> {
-        sessions
-            .into_iter()
-            .map(|s| Session::from_interface(s))
-            .collect()
+        sessions.into_iter().map(Session::from_interface).collect()
     }
 
     pub fn from_interface(session: tmux_interface::Session) -> Session {
@@ -311,20 +307,20 @@ impl Window {
 
     pub fn attach(&self) -> Result<Output, tmux_interface::Error> {
         let target = self.target(0);
-        if let Ok(_) = std::env::var("TMUX") {
+        if std::env::var("TMUX").is_ok() {
             let select = SwitchClient {
                 target_session: Some(target.as_str()),
                 ..Default::default()
             };
             let mut tmux = TmuxInterface::new();
-            return tmux.switch_client(Some(&select));
+            tmux.switch_client(Some(&select))
         } else {
             let attach = AttachSession {
                 target_session: Some(&target),
                 ..Default::default()
             };
             let mut tmux = TmuxInterface::new();
-            return tmux.attach_session(Some(&attach));
+            tmux.attach_session(Some(&attach))
         }
     }
 
