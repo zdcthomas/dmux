@@ -1,6 +1,3 @@
-#[path = "select.rs"]
-pub mod select;
-
 use clap::{
     crate_authors, crate_description, crate_name, crate_version, value_t, values_t, App, Arg,
     SubCommand,
@@ -134,6 +131,7 @@ pub struct Config {
     pub number_of_panes: i32,
     #[serde(default = "default_search_dir")]
     pub search_dir: PathBuf,
+    // TODO: This needs to be refactored, not sure how right now though
     #[serde(default = "default_selected_dir")]
     pub selected_dir: Option<PathBuf>,
     #[serde(default = "default_commands")]
@@ -241,18 +239,13 @@ fn read_line_iter() -> String {
     input.trim().to_string()
 }
 
-fn select_dir(args: &clap::ArgMatches, search_dir: PathBuf) -> Option<PathBuf> {
+fn select_dir(args: &clap::ArgMatches) -> Option<PathBuf> {
     if let Some("clone") = args.subcommand_name() {
         None
     } else if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
         Some(selected_dir)
-
-    // selected_dir: value_t!(args.value_of("selected_dir"), PathBuf)
-    //     .unwrap_or(conf_from_settings.selected_dir),
     } else if grep_cli::is_readable_stdin() && !grep_cli::is_tty_stdin() {
         Some(PathBuf::from(read_line_iter()))
-    // } else if let Some(selected_dir) = Selector::new(search_dir).select_dir() {
-    //     Some(selected_dir)
     } else {
         None
     }
@@ -273,7 +266,7 @@ pub fn build_app() -> CommandType {
             .unwrap_or(conf_from_settings.number_of_panes),
         commands: values_t!(args.values_of("commands"), String)
             .unwrap_or(conf_from_settings.commands),
-        selected_dir: select_dir(&args, search_dir.clone()),
+        selected_dir: select_dir(&args),
         search_dir,
     };
     match args.subcommand_name() {

@@ -13,7 +13,7 @@ extern crate walkdir;
 
 mod app;
 // if this isn't pub the compiler yells at me about dead code, which confuses me greatly
-pub mod select;
+mod select;
 mod tmux;
 
 use app::{
@@ -26,13 +26,15 @@ use std::process::{Command, Stdio};
 use tmux::{Layout, WorkSpace};
 use url::Url;
 
-fn setup_workspace(config: Config, selected_dir: PathBuf) {
-    // let selected_dir: PathBuf;
-    // if let Some(dir) = maybe_dir {
-    //     selected_dir = dir;
-    // } else {
-    //     selected_dir = config.selected_dir;
-    // }
+fn setup_workspace(config: Config, maybe_dir: Option<PathBuf>) {
+    let selected_dir: PathBuf;
+    if let Some(dir) = maybe_dir {
+        selected_dir = dir;
+    } else if let Some(dir) = config.selected_dir {
+        selected_dir = dir;
+    } else {
+        panic!("something went super wrong");
+    }
 
     // TODO: can i get rid of this? maybe panic earlier
     if !selected_dir.exists() {
@@ -57,21 +59,18 @@ fn main() {
 
     match command {
         Local(config) => {
-            let selected_dir: PathBuf;
-            if let Some(dir) = config.selected_dir {
-                selected_dir = dir;
-            } else if let Some(dir) = Selector::new(config.search_dir).select_dir() {
-                selected_dir = dir;
+            if config.selected_dir.is_some() {
+                setup_workspace(config, None)
+            } else if let Some(dir) = Selector::new(&config.search_dir).select_dir() {
+                setup_workspace(config, Some(dir))
             } else {
                 panic!()
             }
-
-            setup_workspace(config, selected_dir)
         }
 
         Pull(pull_config) => {
             let dir = clone_from(&pull_config);
-            setup_workspace(pull_config.open_config, dir)
+            setup_workspace(pull_config.open_config, Some(dir))
         }
     }
 }

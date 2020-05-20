@@ -45,13 +45,16 @@ fn output_to_pathbuf(output: Output) -> Option<PathBuf> {
 }
 
 impl Selector {
-    pub fn new(search_dir: PathBuf) -> Selector {
+    pub fn new(search_dir: &PathBuf) -> Selector {
         let use_fd = Command::new("fd")
             .arg("--version")
             .stdout(Stdio::null())
             .spawn()
             .is_ok();
-        Selector { search_dir, use_fd }
+        Selector {
+            search_dir: search_dir.to_owned(),
+            use_fd,
+        }
     }
 
     fn select_with_fd(&self) -> Option<PathBuf> {
