@@ -330,11 +330,6 @@ impl Window {
             if let Some(pane) = self.get_pane(pane as i32) {
                 pane.send_keys(vec![command.as_str(), "Enter"])
                     .expect("could not send command");
-            } else {
-                // println!(
-                //     "available panes in window {:?} are: {:?}",
-                //     self.name, self.panes
-                // );
             }
         }
     }

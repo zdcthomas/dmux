@@ -4,11 +4,16 @@ use clap::{
 };
 use std::io;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use url::Url;
 
 fn args<'a>() -> clap::ArgMatches<'a> {
-    let fzf_available = Command::new("fzf").arg("--version").spawn().is_ok();
+    let fzf_available = Command::new("fzf")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .is_ok();
     App::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
