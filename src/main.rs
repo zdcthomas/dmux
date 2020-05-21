@@ -13,7 +13,7 @@ mod app;
 mod select;
 mod tmux;
 
-use app::CommandType::{Open, Pull, Select};
+use app::CommandType;
 use select::Selector;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -24,8 +24,8 @@ fn main() {
     let command = app::build_app();
 
     match command {
-        Open(open_config) => open_selected_dir(open_config),
-        Select(select_config) => {
+        CommandType::Open(open_config) => open_selected_dir(open_config),
+        CommandType::Select(select_config) => {
             if let Some(dir) = Selector::new(&select_config.workspace.search_dir).select_dir() {
                 open_selected_dir(app::OpenArgs {
                     selected_dir: dir,
@@ -33,13 +33,14 @@ fn main() {
                 })
             }
         }
-        Pull(pull_config) => {
+        CommandType::Pull(pull_config) => {
             let dir = clone_from(&pull_config);
             open_selected_dir(app::OpenArgs {
                 selected_dir: dir,
                 workspace: pull_config.workspace,
             })
         }
+        CommandType::Layout => tmux::generate_layout(),
     }
 }
 

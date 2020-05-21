@@ -90,6 +90,9 @@ fn args<'a>() -> clap::ArgMatches<'a> {
                         .takes_value(true),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("layout").about("generates the current layout string from tmux"),
+        )
         .get_matches()
 }
 
@@ -198,6 +201,7 @@ pub enum CommandType {
     Open(OpenArgs),
     Select(SelectArgs),
     Pull(PullArgs),
+    Layout,
 }
 
 // I don't like the repetition here
@@ -303,6 +307,8 @@ pub fn build_app() -> CommandType {
                 panic!("Sorry, {} isn't a valid url!", url);
             }
         }
+
+        Some("layout") => CommandType::Layout,
         Some(_) => unreachable!("unexpected subcommand"),
     }
 }

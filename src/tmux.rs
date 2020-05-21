@@ -14,6 +14,28 @@ pub struct Tmux {
     sessions: Vec<Session>,
 }
 
+pub fn generate_layout() {
+    if let Ok(values) = TmuxInterface::new().list_windows(
+        Some(false),
+        Some("#{window_active} #{window_layout}"),
+        None,
+    ) {
+        if let Some(layout) = values.split("\n").find(|l| l.starts_with("1")) {
+            println!(
+                "{}",
+                layout
+                    .split_whitespace()
+                    .last()
+                    .expect("tmux formatted the layout unexpectedly")
+            );
+        } else {
+            panic!("No active tmux window")
+        }
+    } else {
+        panic!("Couldn't get layouts")
+    }
+}
+
 fn target(session_name: &str, window_name: &str, pane: i32) -> String {
     format!(
         "{}:{}.{}",
