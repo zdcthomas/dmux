@@ -40,7 +40,12 @@ fn main() {
                 workspace: pull_config.workspace,
             })
         }
-        CommandType::Layout => tmux::generate_layout(),
+        CommandType::Layout => {
+            if !tmux::in_tmux() {
+                panic!("Not inside a tmux session. Run `tmux a` and select the window you want the layout of.")
+            }
+            tmux::generate_layout()
+        }
     }
 }
 

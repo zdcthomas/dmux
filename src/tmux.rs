@@ -14,6 +14,10 @@ pub struct Tmux {
     sessions: Vec<Session>,
 }
 
+pub fn in_tmux() -> bool {
+    std::env::var("TMUX").is_ok()
+}
+
 pub fn generate_layout() {
     if let Ok(values) = TmuxInterface::new().list_windows(
         Some(false),
@@ -329,7 +333,7 @@ impl Window {
 
     pub fn attach(&self) -> Result<Output, tmux_interface::Error> {
         let target = self.target(0);
-        if std::env::var("TMUX").is_ok() {
+        if in_tmux() {
             let select = SwitchClient {
                 target_session: Some(target.as_str()),
                 ..Default::default()
