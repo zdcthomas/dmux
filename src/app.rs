@@ -120,43 +120,8 @@ id. Pane id's can be found easily with
     )
 }
 
-// I don't like the repetition here
-#[derive(Deserialize, Debug)]
-pub struct Config {
-    #[serde(default = "default_layout_checksum")]
-    pub layout: String,
-    #[serde(default = "default_session_name")]
-    pub session_name: String,
-    #[serde(default = "default_number_of_panes")]
-    pub number_of_panes: i32,
-    #[serde(default = "default_search_dir")]
-    pub search_dir: PathBuf,
-    // TODO: This needs to be refactored, not sure how right now though
-    #[serde(default = "default_selected_dir")]
-    pub selected_dir: Option<PathBuf>,
-    #[serde(default = "default_commands")]
-    pub commands: Vec<String>,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            layout: default_layout_checksum(),
-            session_name: default_session_name(),
-            number_of_panes: default_number_of_panes(),
-            search_dir: dirs::home_dir().unwrap(),
-            selected_dir: None,
-            commands: default_commands(),
-        }
-    }
-}
-
 fn default_search_dir() -> PathBuf {
     dirs::home_dir().unwrap()
-}
-
-fn default_selected_dir() -> Option<PathBuf> {
-    None
 }
 
 fn default_layout_checksum() -> String {
@@ -176,7 +141,7 @@ fn default_commands() -> Vec<String> {
 }
 
 fn config_file_settings() -> config::Config {
-    let default = Config::default();
+    let default = WorkSpaceArgs::default();
     let mut settings = config::Config::default();
     let mut config_conf = dirs::config_dir().unwrap();
     config_conf.push("dmux/dmux.conf.xxxx");
@@ -211,24 +176,61 @@ fn config_file_settings() -> config::Config {
         .to_owned()
 }
 
-fn settings_config(settings: config::Config, target: Option<&str>) -> Config {
+fn settings_config(settings: config::Config, target: Option<&str>) -> WorkSpaceArgs {
     if let Some(target) = target {
-        let profile: Config = settings.get(target).unwrap();
+        let profile: WorkSpaceArgs = settings.get(target).unwrap();
         return profile;
     }
-    let profile: Config = settings.try_into().unwrap();
+    let profile: WorkSpaceArgs = settings.try_into().unwrap();
     profile
 }
 
-pub struct PullConfig {
-    pub repo_url: Url,
-    pub target_dir: PathBuf,
-    pub open_config: Config,
+pub struct SelectArgs {
+    pub workspace: WorkSpaceArgs,
 }
 
 pub enum CommandType {
-    Local(Config),
-    Pull(PullConfig),
+    Open(OpenArgs),
+    Select(SelectArgs),
+    Pull(PullArgs),
+}
+
+// I don't like the repetition here
+#[derive(Deserialize, Debug)]
+pub struct WorkSpaceArgs {
+    #[serde(default = "default_layout_checksum")]
+    pub layout: String,
+    #[serde(default = "default_session_name")]
+    pub session_name: String,
+    #[serde(default = "default_number_of_panes")]
+    pub number_of_panes: i32,
+    #[serde(default = "default_search_dir")]
+    pub search_dir: PathBuf,
+    #[serde(default = "default_commands")]
+    pub commands: Vec<String>,
+}
+
+impl Default for WorkSpaceArgs {
+    fn default() -> Self {
+        Self {
+            layout: default_layout_checksum(),
+            session_name: default_session_name(),
+            number_of_panes: default_number_of_panes(),
+            search_dir: dirs::home_dir().unwrap(),
+            commands: default_commands(),
+        }
+    }
+}
+
+pub struct OpenArgs {
+    pub workspace: WorkSpaceArgs,
+    pub selected_dir: PathBuf,
+}
+
+pub struct PullArgs {
+    pub repo_url: Url,
+    pub target_dir: PathBuf,
+    pub workspace: WorkSpaceArgs,
 }
 
 fn read_line_iter() -> String {
@@ -240,9 +242,7 @@ fn read_line_iter() -> String {
 }
 
 fn select_dir(args: &clap::ArgMatches) -> Option<PathBuf> {
-    if let Some("clone") = args.subcommand_name() {
-        None
-    } else if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
+    if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
         Some(selected_dir)
     } else if grep_cli::is_readable_stdin() && !grep_cli::is_tty_stdin() {
         Some(PathBuf::from(read_line_iter()))
@@ -251,14 +251,12 @@ fn select_dir(args: &clap::ArgMatches) -> Option<PathBuf> {
     }
 }
 
-pub fn build_app() -> CommandType {
+fn build_workspace_args(args: &clap::ArgMatches) -> WorkSpaceArgs {
     let settings = config_file_settings();
-    let args = args();
     let conf_from_settings = settings_config(settings, args.value_of("profile"));
     let search_dir =
         value_t!(args.value_of("search_dir"), PathBuf).unwrap_or(conf_from_settings.search_dir);
-
-    let config = Config {
+    WorkSpaceArgs {
         session_name: value_t!(args.value_of("session_name"), String)
             .unwrap_or(conf_from_settings.session_name),
         layout: value_t!(args.value_of("layout"), String).unwrap_or(conf_from_settings.layout),
@@ -266,24 +264,36 @@ pub fn build_app() -> CommandType {
             .unwrap_or(conf_from_settings.number_of_panes),
         commands: values_t!(args.values_of("commands"), String)
             .unwrap_or(conf_from_settings.commands),
-        selected_dir: select_dir(&args),
         search_dir,
-    };
+    }
+}
+
+pub fn build_app() -> CommandType {
+    let args = args();
+    let workspace = build_workspace_args(&args);
     match args.subcommand_name() {
-        None => CommandType::Local(config),
+        None => {
+            if let Some(selected_dir) = select_dir(&args) {
+                CommandType::Open(OpenArgs {
+                    workspace,
+                    selected_dir,
+                })
+            } else {
+                CommandType::Select(SelectArgs { workspace })
+            }
+        }
         Some("clone") => {
             let clone_args = args.subcommand_matches("clone").unwrap();
             let url = clone_args
                 .value_of("repo")
                 .expect("No repo specified, what should I clone?");
             if let Ok(repo_url) = Url::parse(url) {
-                let pull = PullConfig {
+                CommandType::Pull(PullArgs {
                     repo_url,
                     target_dir: value_t!(args.value_of("target_dir"), PathBuf)
                         .unwrap_or_else(|_| dirs::home_dir().unwrap()),
-                    open_config: config,
-                };
-                CommandType::Pull(pull)
+                    workspace,
+                })
             } else {
                 panic!("Sorry, {} isn't a valid url!", url);
             }
