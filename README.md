@@ -1,17 +1,70 @@
 # DMUX
-## (Development tMUX)
-### new names definitely being considered
+### (*D*evelopment t*MUX*)
+##### new names definitely being considered
+
+## What is this?
+If you use tmux a lot, then you probably have a script that looks like this:
+```bash
+tmux new-window -n $WINDOW_NAME
+tmux split-window -h
+tmux select-pane -t 0
+tmux send-keys "fish" C-m
+tmux send-keys "nvim" C-m
+tmux select-pane -t 1
+tmux send-keys "fish" C-m
+tmux resize-pane -R 80
+tmux -2 attach-session -t $SESSION
+```
+Scripts like the one above set up and open a tmux session with specified commands and layout.
+But  if I wanted to have another pane that ran my tests, or another for note taking, I had to create an entirely new script.
+I also wanted to use some program like [fzf](https://github.com/junegunn/fzf) or [skim](https://github.com/lotabout/skim) to pick a directory to open.
+This got super annoying.
+
+Dmux aims to handle all of this for you.
+Its main job is to open up configurable "workspaces" in whatever directory you want.
+It also allows you to specify everything you would normally set in a script like the one above.
+
+For example. The above script using dmux would be:
+`dmux -c nvim fish <path>`
+Then if I wanted the workspace to open 3 panes instead of two, I could add:
+`dmux -c nvim fish "npm i" -p 3 <path>`
+
+But say I wanted to use [fzf](https://github.com/junegunn/fzf) to select a dir to open up. 
+Well, if I have it installed on my system, then I just have to leave off the <path> argument and dmux will automatically open an [fzf](https://github.com/junegunn/fzf) selector, populated with directories to choose from.
+
+If this part is a bit slow to get started, no worries, you can speed up the dir searching by installing [fd](https://github.com/sharkdp/fd).
+
+You can also use whatever combination of dir searching, selector, or hardcoded path you want by piping a path into dmux:
+`fd -td | fzf | dmux`
+or having a path argument:
+`dmux <path>`
+
 
 ## Installation 
-macOS 
-```
+
+##### macOS
+``` bash
 brew tap zdcthomas/tools
 brew install dmux
 ```
 
+Or if you have rust installed
+``` bash
+git clone https://github.com/zdcthomas/dmux
+cd dmux
+cargo install --path .
+```
+ 
+##### AUR
+```
+Coming soon
+```
+
 ## Usage
-* `dmux <path>` or `<path> | dmux` will open the workspace in the provided path
 * `dmux` alone will use `fzf` to open up a list of dirs in `~`. This is equivalent to saying `fd -td . ~/ | fzf | dmux`
+* `dmux <path>` or `<path> | dmux` will open the workspace in the provided path
+* `dmux clone` will clone a git repo and open the repo in a workspace
+* `dmux layout` will describe the current Tmux layout (this is mostly )
 * `dmux --help` for more information
 
 
@@ -48,11 +101,12 @@ If you have [fd](https://github.com/sharkdp/fd) installed dmux will use it to sp
 - [X] Profiles in config that represent sets of configuration.
 - [X] Config/Arg for dir search command
 - [X] Optionally uses fd for a faster/async dir search
+- [X] Subcommand to describe current layout
 - [ ] Subcommand for killing windows from fzf
-- [ ] Subcommand to describe current layout
+- [ ] Subcommand for generating default configuration file
 - [ ] Config/Arg for dir search depth
-- [ ] One off commands that once completed, kill the pane their in, E.G `npm i` `mix deps.get`
-- [ ] dmux.local.xxxx file so that specific dirs can have specific layouts. This is dangerous because dmux allows config to run arbitrary commands, which could be used to be malicious
+- [ ] One-off commands that once completed, kill the pane they're in, E.G `npm i` or `mix deps.get`
+- [ ] dmux.local.{yml|json|toml} file so that specific dirs can have specific layouts. This is dangerous because dmux allows config to run arbitrary commands, which could be used to be malicious
 - [ ] Switch to skim to avoid external deps
 
 
