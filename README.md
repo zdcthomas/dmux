@@ -16,15 +16,15 @@ tmux resize-pane -R 80
 tmux -2 attach-session -t $SESSION
 ```
 Scripts like the one above set up and open a tmux session with specified commands and layout.
-But  if I wanted to have another pane that ran my tests, or another for note taking, I had to create an entirely new script.
-I also wanted to use some program like [fzf](https://github.com/junegunn/fzf) or [skim](https://github.com/lotabout/skim) to pick a directory to open.
+But if I wanted to have another pane that ran my tests, or another for note taking, I'd have to create an entirely new script.
+I also wanted to be able to use some program like [fzf](https://github.com/junegunn/fzf) or [skim](https://github.com/lotabout/skim) to pick a directory to open.
 This got super annoying.
 
 Dmux aims to handle all of this for you.
 Its main job is to open up configurable "workspaces" in whatever directory you want.
 It also allows you to specify everything you would normally set in a script like the one above.
 
-For example. The above script using dmux would be:
+For example, the above script using dmux would be:
 `dmux -c nvim fish <path>`
 Then if I wanted the workspace to open 3 panes instead of two, I could add:
 `dmux -c nvim fish "npm i" -p 3 <path>`
