@@ -39,6 +39,17 @@ You can also use whatever combination of dir searching, selector, or hardcoded p
 or having a path argument:
 `dmux <path>`
 
+## Why another Tmux Manager?
+There's a ton of other fantastic projects out there that also do similar things that you should check out:
+* [tmuxinator](https://github.com/tmuxinator/tmuxinator)
+* [tmuxomatic](https://github.com/oxidane/tmuxomatic) - Unmaintained
+* [teamocil](https://github.com/remi/teamocil) - Unmaintained
+
+#### So Why did I put together Dmux? 
+* Dmux is a single binary that doesn't depend on a language to run.
+* Other tools (like potentially the most popular manager [tmuxinator](https://github.com/tmuxinator/tmuxinator)) are based around a system of "projects" which have a specific root directory. This makes it difficult to reuse these configurations. Dmux on the on the other hand is based around directory agnostic profiles that can be run on any root directory.
+* Because of dmux being agnostic of root dir, it also focuses on quickly selecting and opening directories. You can easily set up selection scripts to pipe a dir into dmux, or if you have fzf installed dmux will use that when run without arguments to let you select a dir.
+* These 'profiles' also mix very well with command line arguments (all workspace settings can be set on either) and can therefore be easily extended in scripts or bindings.
 
 ## Installation 
 
