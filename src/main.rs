@@ -4,7 +4,6 @@ extern crate clap;
 extern crate config;
 extern crate dirs;
 extern crate grep_cli;
-extern crate skim;
 extern crate tmux_interface;
 extern crate url;
 extern crate walkdir;
