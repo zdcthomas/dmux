@@ -277,6 +277,14 @@ fn build_workspace_args(args: &clap::ArgMatches) -> WorkSpaceArgs {
     }
 }
 
+fn expand_selected_dir(path: PathBuf) -> PathBuf {
+    if path == PathBuf::from(".") {
+        return std::env::current_dir().expect("couldn't get current dir");
+    } else {
+        return path;
+    }
+}
+
 pub fn build_app() -> CommandType {
     let args = args();
     let workspace = build_workspace_args(&args);
@@ -285,7 +293,7 @@ pub fn build_app() -> CommandType {
             if let Some(selected_dir) = select_dir(&args) {
                 CommandType::Open(OpenArgs {
                     workspace,
-                    selected_dir,
+                    selected_dir: expand_selected_dir(selected_dir),
                 })
             } else {
                 CommandType::Select(SelectArgs { workspace })

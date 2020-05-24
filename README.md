@@ -61,9 +61,7 @@ brew install dmux
 
 Or if you have rust installed
 ``` bash
-git clone https://github.com/zdcthomas/dmux
-cd dmux
-cargo install --path .
+cargo install dmux
 ```
  
 ##### AUR
