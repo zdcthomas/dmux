@@ -73,7 +73,7 @@ Coming soon
 * `dmux` alone will use `fzf` to open up a list of dirs in `~`. This is equivalent to saying `fd -td . ~/ | fzf | dmux`
 * `dmux <path>` or `<path> | dmux` will open the workspace in the provided path
 * `dmux clone` will clone a git repo and open the repo in a workspace
-* `dmux layout` will describe the current Tmux layout (this is mostly )
+* `dmux layout` will describe the current Tmux layout. This uses the tmux layout representation
 * `dmux --help` for more information
 
 
