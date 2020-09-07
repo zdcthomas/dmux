@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
@@ -31,15 +32,15 @@ pub struct Selector {
     use_fd: bool,
 }
 
-fn output_to_pathbuf(output: Output) -> Option<PathBuf> {
+fn output_to_pathbuf(output: Output) -> Result<PathBuf> {
     if output.status.success() {
         let mut stdout = output.stdout;
         // removes trailing newline, probably a better way to do this
         stdout.pop();
         let path: PathBuf = String::from_utf8(stdout).unwrap().parse().unwrap();
-        Some(path)
+        Ok(path)
     } else {
-        None
+        Err(anyhow!("Couldn't parse path from {:?}", output.stdout))
     }
 }
 
@@ -56,7 +57,7 @@ impl Selector {
         }
     }
 
-    fn select_with_fd(&self) -> Option<PathBuf> {
+    fn select_with_fd(&self) -> Result<PathBuf> {
         let mut fd = Command::new("fd")
             .arg("-td")
             .arg(".")
@@ -80,28 +81,26 @@ impl Selector {
         output_to_pathbuf(output)
     }
 
-    fn select_with_walk_dir(&self) -> Option<PathBuf> {
+    fn select_with_walk_dir(&self) -> Result<PathBuf> {
         let files = all_dirs_in_path(&self.search_dir);
         let mut fzf = Command::new("fzf-tmux")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+            .spawn()?;
 
         // this should be converted to an async stream so that
         // selection doesn't have to wait for dir traversal
         fzf.stdin
             .as_mut()
-            .unwrap()
-            .write_all(files.as_bytes())
-            .unwrap();
+            .ok_or_else(|| anyhow!("fzf couldn't take stdin"))?
+            .write_all(files.as_bytes())?;
 
-        let output = fzf.wait_with_output().unwrap();
+        let output = fzf.wait_with_output()?;
 
         output_to_pathbuf(output)
     }
 
-    pub fn select_dir(&self) -> Option<PathBuf> {
+    pub fn select_dir(&self) -> Result<PathBuf> {
         if self.use_fd {
             self.select_with_fd()
         } else {

@@ -7,11 +7,14 @@ extern crate grep_cli;
 extern crate tmux_interface;
 extern crate url;
 extern crate walkdir;
+#[macro_use]
+extern crate anyhow;
 
 mod app;
 mod select;
 mod tmux;
 
+use anyhow::Result;
 use app::CommandType;
 use select::Selector;
 use std::path::{Path, PathBuf};
@@ -20,37 +23,54 @@ use tmux::{Layout, WorkSpace};
 use url::Url;
 
 fn main() {
-    let command = app::build_app();
+    write_result(run_command_from_args(app::build_app()))
+}
 
+fn run_command_from_args(command: CommandType) -> Result<()> {
     match command {
-        CommandType::Open(open_config) => open_selected_dir(open_config),
-        CommandType::Select(select_config) => {
-            if let Some(dir) = Selector::new(&select_config.workspace.search_dir).select_dir() {
-                open_selected_dir(app::OpenArgs {
-                    selected_dir: dir,
-                    workspace: select_config.workspace,
-                })
-            }
+        CommandType::Open(open_config) => {
+            open_selected_dir(open_config)?;
+            Ok(())
         }
-        CommandType::Pull(pull_config) => {
-            let dir = clone_from(&pull_config);
+        CommandType::Select(select_config) => {
+            let dir = Selector::new(&select_config.workspace.search_dir).select_dir()?;
             open_selected_dir(app::OpenArgs {
                 selected_dir: dir,
-                workspace: pull_config.workspace,
-            })
+                workspace: select_config.workspace,
+            })?;
+            Ok(())
+        }
+        CommandType::Pull(pull_config) => {
+            if let Ok(dir) = clone_from(&pull_config) {
+                open_selected_dir(app::OpenArgs {
+                    selected_dir: dir,
+                    workspace: pull_config.workspace,
+                })?;
+                Ok(())
+            } else {
+                Err(anyhow!("Pull failed"))
+            }
         }
         CommandType::Layout => {
             if !tmux::in_tmux() {
-                panic!("Not inside a tmux session. Run `tmux a` and select the window you want the layout of.")
-            }
-            tmux::generate_layout()
+                return Err(anyhow!("Not inside a tmux session. Run `tmux a` and select the window you want the layout of."));
+            };
+            tmux::generate_layout()?;
+            Ok(())
         }
     }
 }
 
-fn open_selected_dir(config: app::OpenArgs) {
+fn write_result(result: Result<(), anyhow::Error>) {
+    if let Err(error_message) = result {
+        eprintln!("error: {:?}", error_message);
+        std::process::exit(1);
+    }
+}
+
+fn open_selected_dir(config: app::OpenArgs) -> Result<()> {
     if !config.selected_dir.exists() {
-        panic!("dude, that's not a path")
+        return Err(anyhow!("{:?} isn't a valid path", config.selected_dir));
     }
     let layout = Layout {
         layout_string: config.workspace.layout,
@@ -58,40 +78,73 @@ fn open_selected_dir(config: app::OpenArgs) {
     };
     let workspaces = WorkSpace {
         commands: config.workspace.commands,
-        dir: String::from(config.selected_dir.to_str().unwrap()),
+        dir: path_to_string(&config.selected_dir)?,
         layout,
         session_name: config.workspace.session_name,
-        window_name: path_to_window_name(&config.selected_dir).to_string(),
+        window_name: path_to_window_name(&config.selected_dir)?,
     };
     tmux::setup_workspace(workspaces);
+    Ok(())
 }
 
-// TODO: -> Result<Output, Error>
-fn git_url_to_dir_name(url: &Url) -> String {
-    let segments = url.path_segments().ok_or_else(|| "cannot be base").unwrap();
-    segments.last().unwrap().replace(".git", "")
-}
-
-fn clone_from(config: &app::PullArgs) -> PathBuf {
-    let dir_name = git_url_to_dir_name(&config.repo_url);
-    let target = config.target_dir.join(dir_name);
-    if !target.exists() {
-        Command::new("git")
-            .arg("clone")
-            .arg(config.repo_url.as_str())
-            .arg(target.to_str().expect("couldn't make remote into dir"))
-            .stdout(Stdio::inherit())
-            .output()
-            .expect("could not clone");
+fn git_url_to_dir_name(git_url: &str) -> Result<String> {
+    if let Ok(url) = Url::parse(git_url) {
+        Ok(url
+            .path_segments()
+            .ok_or_else(|| anyhow!("cannot be base"))?
+            .last()
+            .ok_or_else(|| anyhow!("no segments"))?
+            .replace(".git", ""))
+    } else {
+        Ok(git_url
+            .split('/')
+            .last()
+            .ok_or_else(|| anyhow!("I don't know how to parse a dir from {:?}", git_url))?
+            .replace(".git", ""))
     }
-    target
 }
 
-fn path_to_window_name(path: &Path) -> String {
-    String::from(
-        path.file_name()
-            .expect("dir path contained invalid unicode")
-            .to_str()
-            .unwrap(),
-    )
+fn clone_from(config: &app::PullArgs) -> Result<PathBuf> {
+    let dir_name = git_url_to_dir_name(&config.repo_url)?;
+    let target = config.target_dir.join(dir_name);
+    Command::new("git")
+        .arg("clone")
+        .arg(config.repo_url.as_str())
+        .arg(
+            target
+                .to_str()
+                .ok_or_else(|| anyhow!("Specified target couldn't be used {:?}", target))?,
+        )
+        .stdout(Stdio::inherit())
+        .output()?;
+    Ok(target)
+}
+
+fn path_to_string(path: &Path) -> Result<String> {
+    Ok(path
+        .to_str()
+        .ok_or_else(|| anyhow!("Invalid file"))?
+        .to_string())
+}
+
+fn path_to_window_name(path: &Path) -> Result<String> {
+    let file_str = path
+        .file_name()
+        .ok_or_else(|| anyhow!("No file name found"))?
+        .to_str()
+        .ok_or_else(|| anyhow!("Invalid file"));
+
+    Ok(String::from(file_str?))
+}
+
+#[test]
+fn git_url_to_dir_name_test() {
+    assert_eq!(
+        "dmux".to_string(),
+        git_url_to_dir_name("https://github.com/zdcthomas/dmux").unwrap()
+    );
+    assert_eq!(
+        "dmux".to_string(),
+        git_url_to_dir_name("git@github.com:zdcthomas/dmux.git").unwrap()
+    );
 }

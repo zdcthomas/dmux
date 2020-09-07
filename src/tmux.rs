@@ -1,7 +1,7 @@
 extern crate tmux_interface;
+use anyhow::Result;
 use regex::Regex;
 use std::process::Output;
-use std::result::Result;
 use tmux_interface::pane::PANE_ALL;
 use tmux_interface::session::SESSION_ALL;
 use tmux_interface::window::WINDOW_ALL;
@@ -18,25 +18,26 @@ pub fn in_tmux() -> bool {
     std::env::var("TMUX").is_ok()
 }
 
-pub fn generate_layout() {
+pub fn generate_layout() -> Result<()> {
     if let Ok(values) = TmuxInterface::new().list_windows(
         Some(false),
         Some("#{window_active} #{window_layout}"),
         None,
     ) {
-        if let Some(layout) = values.split("\n").find(|l| l.starts_with("1")) {
+        if let Some(layout) = values.split('\n').find(|l| l.starts_with('1')) {
             println!(
                 "{}",
                 layout
                     .split_whitespace()
                     .last()
-                    .expect("tmux formatted the layout unexpectedly")
+                    .ok_or_else(|| anyhow!("layout invalid"))?
             );
+            Ok(())
         } else {
-            panic!("No active tmux window")
+            Err(anyhow!("No active tmux window"))
         }
     } else {
-        panic!("Couldn't get layouts")
+        Err(anyhow!("Couldn't get layouts"))
     }
 }
 

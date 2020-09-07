@@ -5,7 +5,6 @@ use clap::{
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use url::Url;
 
 fn args<'a>() -> clap::ArgMatches<'a> {
     let fzf_available = Command::new("fzf")
@@ -81,7 +80,11 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         .subcommand(
             SubCommand::with_name("clone")
                 .about("clones a git repository, and then opens a workspace in the repo")
-                .arg(Arg::with_name("repo").help("specifies the repo to clone from"))
+                .arg(
+                    Arg::with_name("repo")
+                        .help("specifies the repo to clone from")
+                        .required(true),
+                )
                 .arg(
                     Arg::with_name("name")
                         .short("n")
@@ -237,7 +240,7 @@ pub struct OpenArgs {
 }
 
 pub struct PullArgs {
-    pub repo_url: Url,
+    pub repo_url: String,
     pub target_dir: PathBuf,
     pub workspace: WorkSpaceArgs,
 }
@@ -279,9 +282,9 @@ fn build_workspace_args(args: &clap::ArgMatches) -> WorkSpaceArgs {
 
 fn expand_selected_dir(path: PathBuf) -> PathBuf {
     if path == PathBuf::from(".") {
-        return std::env::current_dir().expect("couldn't get current dir");
+        std::env::current_dir().expect("couldn't get current dir")
     } else {
-        return path;
+        path
     }
 }
 
@@ -301,19 +304,16 @@ pub fn build_app() -> CommandType {
         }
         Some("clone") => {
             let clone_args = args.subcommand_matches("clone").unwrap();
-            let url = clone_args
+            let repo_url = clone_args
                 .value_of("repo")
-                .expect("No repo specified, what should I clone?");
-            if let Ok(repo_url) = Url::parse(url) {
-                CommandType::Pull(PullArgs {
-                    repo_url,
-                    target_dir: value_t!(args.value_of("target_dir"), PathBuf)
-                        .unwrap_or_else(|_| dirs::home_dir().unwrap()),
-                    workspace,
-                })
-            } else {
-                panic!("Sorry, {} isn't a valid url!", url);
-            }
+                .expect("No repo specified, what should I clone?")
+                .to_owned();
+            CommandType::Pull(PullArgs {
+                repo_url,
+                target_dir: value_t!(args.value_of("target_dir"), PathBuf)
+                    .unwrap_or_else(|_| dirs::home_dir().unwrap()),
+                workspace,
+            })
         }
 
         Some("layout") => CommandType::Layout,
