@@ -16,6 +16,7 @@ mod tmux;
 
 use anyhow::Result;
 use app::CommandType;
+use colored::*;
 use select::Selector;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -23,7 +24,17 @@ use tmux::{Layout, WorkSpace};
 use url::Url;
 
 fn main() {
-    write_result(run_command_from_args(app::build_app()))
+    if let Err(err) = do_main() {
+        eprintln!("{}: {}", "Error".red(), err);
+        err.chain()
+            .skip(1)
+            .for_each(|cause| eprintln!("because: {}", cause));
+        std::process::exit(1);
+    }
+}
+
+fn do_main() -> Result<()> {
+    run_command_from_args(app::build_app()?)
 }
 
 fn run_command_from_args(command: CommandType) -> Result<()> {
@@ -33,11 +44,12 @@ fn run_command_from_args(command: CommandType) -> Result<()> {
             Ok(())
         }
         CommandType::Select(select_config) => {
-            let dir = Selector::new(&select_config.workspace.search_dir).select_dir()?;
-            open_selected_dir(app::OpenArgs {
-                selected_dir: dir,
-                workspace: select_config.workspace,
-            })?;
+            if let Some(dir) = Selector::new(&select_config.workspace.search_dir).select_dir()? {
+                open_selected_dir(app::OpenArgs {
+                    selected_dir: dir,
+                    workspace: select_config.workspace,
+                })?;
+            };
             Ok(())
         }
         CommandType::Pull(pull_config) => {
@@ -61,13 +73,6 @@ fn run_command_from_args(command: CommandType) -> Result<()> {
     }
 }
 
-fn write_result(result: Result<(), anyhow::Error>) {
-    if let Err(error_message) = result {
-        eprintln!("error: {:?}", error_message);
-        std::process::exit(1);
-    }
-}
-
 fn open_selected_dir(config: app::OpenArgs) -> Result<()> {
     if !config.selected_dir.exists() {
         return Err(anyhow!("{:?} isn't a valid path", config.selected_dir));
@@ -83,7 +88,7 @@ fn open_selected_dir(config: app::OpenArgs) -> Result<()> {
         session_name: config.workspace.session_name,
         window_name: path_to_window_name(&config.selected_dir)?,
     };
-    tmux::setup_workspace(workspaces);
+    tmux::setup_workspace(workspaces)?;
     Ok(())
 }
 

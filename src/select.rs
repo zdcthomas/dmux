@@ -32,15 +32,16 @@ pub struct Selector {
     use_fd: bool,
 }
 
-fn output_to_pathbuf(output: Output) -> Result<PathBuf> {
+fn output_to_pathbuf(output: Output) -> Option<PathBuf> {
     if output.status.success() {
         let mut stdout = output.stdout;
         // removes trailing newline, probably a better way to do this
         stdout.pop();
         let path: PathBuf = String::from_utf8(stdout).unwrap().parse().unwrap();
-        Ok(path)
+        Some(path)
     } else {
-        Err(anyhow!("Couldn't parse path from {:?}", output.stdout))
+        // Err(anyhow!("Couldn't parse path from {:?}", output.stdout))
+        None
     }
 }
 
@@ -57,31 +58,32 @@ impl Selector {
         }
     }
 
-    fn select_with_fd(&self) -> Result<PathBuf> {
+    fn select_with_fd(&self) -> Result<Option<PathBuf>> {
         let mut fd = Command::new("fd")
             .arg("-td")
             .arg(".")
             .arg(
                 self.search_dir
                     .to_str()
-                    .expect("couldn't make search dir a string"),
+                    .ok_or_else(|| anyhow!("couldn't make search dir a string"))?,
             )
             .stdout(Stdio::piped())
-            .spawn()
-            .expect("fd failed unexpectedly");
+            .spawn()?;
 
-        let pipe = fd.stdout.take().unwrap();
+        let pipe = fd
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("FD command's stdout could not be read"))?;
         let fzf = Command::new("fzf-tmux")
             .stdin(pipe)
             .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let output = fzf.wait_with_output().expect("fzf failed unexpectedly");
-        fd.kill().expect("could not kill fd process");
-        output_to_pathbuf(output)
+            .spawn()?;
+        let output = fzf.wait_with_output()?;
+        fd.kill()?;
+        Ok(output_to_pathbuf(output))
     }
 
-    fn select_with_walk_dir(&self) -> Result<PathBuf> {
+    fn select_with_walk_dir(&self) -> Result<Option<PathBuf>> {
         let files = all_dirs_in_path(&self.search_dir);
         let mut fzf = Command::new("fzf-tmux")
             .stdin(Stdio::piped())
@@ -97,10 +99,10 @@ impl Selector {
 
         let output = fzf.wait_with_output()?;
 
-        output_to_pathbuf(output)
+        Ok(output_to_pathbuf(output))
     }
 
-    pub fn select_dir(&self) -> Result<PathBuf> {
+    pub fn select_dir(&self) -> Result<Option<PathBuf>> {
         if self.use_fd {
             self.select_with_fd()
         } else {

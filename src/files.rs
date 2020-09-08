@@ -9,7 +9,7 @@ fn is_git_dir(entry: &DirEntry) -> bool {
     }
 }
 
-pub fn all_dirs_in_path(search_dir: PathBuf) -> String {
+pub fn all_dirs_in_path(search_dir: PathBuf) -> Result<String> {
     let mut path_input = String::new();
     for entry in WalkDir::new(search_dir)
         .max_depth(4)
@@ -18,10 +18,10 @@ pub fn all_dirs_in_path(search_dir: PathBuf) -> String {
     {
         if let Ok(path) = entry {
             path_input.push_str("\n");
-            path_input.push_str(path.path().to_str().unwrap());
+            path_input.push_str(path.path().to_str()?);
         }
     }
-    return path_input;
+    return Ok(path_input);
 }
 
 // Note, i really want to just go and steal what i need from fd
