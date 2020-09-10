@@ -10,14 +10,13 @@ use tmux_interface::{
     TmuxInterface, Windows,
 };
 
-pub fn has_tmux() -> Result<()> {
-    if Command::new("tmux").arg("-V").output()?.status.success() {
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "Tmux couldn't be found in path.\nPlease install Tmux in order to use Dmux in order to use Dmux."
-        ))
-    }
+pub fn has_tmux() -> bool {
+    Command::new("tmux")
+        .arg("-V")
+        .output()
+        .unwrap()
+        .status
+        .success()
 }
 
 pub struct Tmux {

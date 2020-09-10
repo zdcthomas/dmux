@@ -34,11 +34,13 @@ fn main() {
 }
 
 fn do_main() -> Result<()> {
-    tmux::has_tmux()?;
     run_command_from_args(app::build_app()?)
 }
 
 fn run_command_from_args(command: CommandType) -> Result<()> {
+    if !tmux::has_tmux() {
+        return Err(anyhow!("Tmux is not installed."));
+    }
     match command {
         CommandType::Open(open_config) => {
             open_selected_dir(open_config)?;
