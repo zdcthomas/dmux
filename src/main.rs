@@ -34,6 +34,7 @@ fn main() {
 }
 
 fn do_main() -> Result<()> {
+    tmux::has_tmux()?;
     run_command_from_args(app::build_app()?)
 }
 
@@ -52,17 +53,17 @@ fn run_command_from_args(command: CommandType) -> Result<()> {
             };
             Ok(())
         }
-        CommandType::Pull(pull_config) => {
-            if let Ok(dir) = clone_from(&pull_config) {
+        CommandType::Pull(pull_config) => match clone_from(&pull_config) {
+            Ok(dir) => {
                 open_selected_dir(app::OpenArgs {
                     selected_dir: dir,
                     workspace: pull_config.workspace,
                 })?;
+
                 Ok(())
-            } else {
-                Err(anyhow!("Pull failed"))
             }
-        }
+            Err(err) => Err(err),
+        },
         CommandType::Layout => {
             if !tmux::in_tmux() {
                 return Err(anyhow!("Not inside a tmux session. Run `tmux a` and select the window you want the layout of."));
@@ -112,7 +113,7 @@ fn git_url_to_dir_name(git_url: &str) -> Result<String> {
 fn clone_from(config: &app::PullArgs) -> Result<PathBuf> {
     let dir_name = git_url_to_dir_name(&config.repo_url)?;
     let target = config.target_dir.join(dir_name);
-    Command::new("git")
+    let output = Command::new("git")
         .arg("clone")
         .arg(config.repo_url.as_str())
         .arg(
@@ -122,7 +123,11 @@ fn clone_from(config: &app::PullArgs) -> Result<PathBuf> {
         )
         .stdout(Stdio::inherit())
         .output()?;
-    Ok(target)
+    if output.status.success() {
+        Ok(target)
+    } else {
+        Err(anyhow!("{}", String::from_utf8(output.stderr)?))
+    }
 }
 
 fn path_to_string(path: &Path) -> Result<String> {

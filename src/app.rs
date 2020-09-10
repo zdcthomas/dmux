@@ -236,6 +236,7 @@ pub struct OpenArgs {
     pub selected_dir: PathBuf,
 }
 
+#[derive(Debug)]
 pub struct PullArgs {
     pub repo_url: String,
     pub target_dir: PathBuf,

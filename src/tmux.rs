@@ -1,7 +1,7 @@
 extern crate tmux_interface;
 use anyhow::Result;
 use regex::Regex;
-use std::process::Output;
+use std::process::{Command, Output};
 use tmux_interface::pane::PANE_ALL;
 use tmux_interface::session::SESSION_ALL;
 use tmux_interface::window::WINDOW_ALL;
@@ -9,6 +9,16 @@ use tmux_interface::{
     AttachSession, NewSession, NewWindow, SendKeys, Sessions, SplitWindow, SwitchClient,
     TmuxInterface, Windows,
 };
+
+pub fn has_tmux() -> Result<()> {
+    if Command::new("tmux").arg("-V").output()?.status.success() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Tmux couldn't be found in path.\nPlease install Tmux in order to use Dmux in order to use Dmux."
+        ))
+    }
+}
 
 pub struct Tmux {
     sessions: Vec<Session>,
