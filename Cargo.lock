@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "dmux"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow 1.0.32 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.1 (registry+https://github.com/rust-lang/crates.io-index)",
