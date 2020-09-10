@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
@@ -39,6 +40,7 @@ fn output_to_pathbuf(output: Output) -> Option<PathBuf> {
         let path: PathBuf = String::from_utf8(stdout).unwrap().parse().unwrap();
         Some(path)
     } else {
+        // Err(anyhow!("Couldn't parse path from {:?}", output.stdout))
         None
     }
 }
@@ -56,52 +58,51 @@ impl Selector {
         }
     }
 
-    fn select_with_fd(&self) -> Option<PathBuf> {
+    fn select_with_fd(&self) -> Result<Option<PathBuf>> {
         let mut fd = Command::new("fd")
             .arg("-td")
             .arg(".")
             .arg(
                 self.search_dir
                     .to_str()
-                    .expect("couldn't make search dir a string"),
+                    .ok_or_else(|| anyhow!("couldn't make search dir a string"))?,
             )
             .stdout(Stdio::piped())
-            .spawn()
-            .expect("fd failed unexpectedly");
+            .spawn()?;
 
-        let pipe = fd.stdout.take().unwrap();
+        let pipe = fd
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("FD command's stdout could not be read"))?;
         let fzf = Command::new("fzf-tmux")
             .stdin(pipe)
             .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let output = fzf.wait_with_output().expect("fzf failed unexpectedly");
-        fd.kill().expect("could not kill fd process");
-        output_to_pathbuf(output)
+            .spawn()?;
+        let output = fzf.wait_with_output()?;
+        fd.kill()?;
+        Ok(output_to_pathbuf(output))
     }
 
-    fn select_with_walk_dir(&self) -> Option<PathBuf> {
+    fn select_with_walk_dir(&self) -> Result<Option<PathBuf>> {
         let files = all_dirs_in_path(&self.search_dir);
         let mut fzf = Command::new("fzf-tmux")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+            .spawn()?;
 
         // this should be converted to an async stream so that
         // selection doesn't have to wait for dir traversal
         fzf.stdin
             .as_mut()
-            .unwrap()
-            .write_all(files.as_bytes())
-            .unwrap();
+            .ok_or_else(|| anyhow!("fzf couldn't take stdin"))?
+            .write_all(files.as_bytes())?;
 
-        let output = fzf.wait_with_output().unwrap();
+        let output = fzf.wait_with_output()?;
 
-        output_to_pathbuf(output)
+        Ok(output_to_pathbuf(output))
     }
 
-    pub fn select_dir(&self) -> Option<PathBuf> {
+    pub fn select_dir(&self) -> Result<Option<PathBuf>> {
         if self.use_fd {
             self.select_with_fd()
         } else {
