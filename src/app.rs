@@ -1,3 +1,4 @@
+use anyhow::Result;
 use clap::{
     crate_authors, crate_description, crate_name, crate_version, value_t, values_t, App, Arg,
     SubCommand,
@@ -5,7 +6,6 @@ use clap::{
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use url::Url;
 
 fn args<'a>() -> clap::ArgMatches<'a> {
     let fzf_available = Command::new("fzf")
@@ -81,7 +81,11 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         .subcommand(
             SubCommand::with_name("clone")
                 .about("clones a git repository, and then opens a workspace in the repo")
-                .arg(Arg::with_name("repo").help("specifies the repo to clone from"))
+                .arg(
+                    Arg::with_name("repo")
+                        .help("specifies the repo to clone from")
+                        .required(true),
+                )
                 .arg(
                     Arg::with_name("name")
                         .short("n")
@@ -148,49 +152,45 @@ fn default_commands() -> Vec<String> {
     vec!["vim".to_string(), "ls".to_string()]
 }
 
-fn config_file_settings() -> config::Config {
+fn config_file_settings() -> Result<config::Config> {
+    // switch to confy perobably
     let default = WorkSpaceArgs::default();
     let mut settings = config::Config::default();
-    let mut config_conf = dirs::config_dir().unwrap();
+    let mut config_conf =
+        dirs::config_dir().ok_or_else(|| anyhow!("Config dir couldn't be read"))?;
     config_conf.push("dmux/dmux.conf.xxxx");
 
-    let mut home_conf = dirs::home_dir().unwrap();
+    let mut home_conf =
+        dirs::home_dir().ok_or_else(|| anyhow!("Home directory couldn't be found"))?;
     home_conf.push(".dmux.conf.xxxx");
 
-    let mut mac_config = dirs::home_dir().unwrap();
+    let mut mac_config =
+        dirs::home_dir().ok_or_else(|| anyhow!("Home directory couldn't be found"))?;
     mac_config.push(".config/dmux/dmux.conf.xxx");
-    settings
+    Ok(settings
         // ~/dmux.conf.(yaml | json | toml)
-        .merge(config::File::with_name(config_conf.to_str().unwrap()).required(false))
-        .unwrap()
+        .merge(config::File::with_name(config_conf.to_str().unwrap()).required(false))?
         // ~/{xdg_config|.config}dmux.conf.(yaml | json | toml)
-        .merge(config::File::with_name(home_conf.to_str().unwrap()).required(false))
-        .unwrap()
-        .merge(config::File::with_name(mac_config.to_str().unwrap()).required(false))
-        .unwrap()
+        .merge(config::File::with_name(home_conf.to_str().unwrap()).required(false))?
+        .merge(config::File::with_name(mac_config.to_str().unwrap()).required(false))?
         // Add in settings from the environment (with a prefix of DMUX)
         // Eg.. `DMUX_SESSION_NAME=foo dmux` would set the `session_name` key
-        .merge(config::Environment::with_prefix("DMUX"))
-        .unwrap()
-        .set_default("layout", default.layout)
-        .unwrap()
+        .merge(config::Environment::with_prefix("DMUX"))?
+        .set_default("layout", default.layout)?
         // the trait `std::convert::From<i32>` is not implemented for `config::value::ValueKind`
-        .set_default("number_of_panes", default.number_of_panes as i64)
-        .unwrap()
-        .set_default("commands", default.commands)
-        .unwrap()
-        .set_default("session_name", default.session_name)
-        .unwrap()
-        .to_owned()
+        .set_default("number_of_panes", default.number_of_panes as i64)?
+        .set_default("commands", default.commands)?
+        .set_default("session_name", default.session_name)?
+        .to_owned())
 }
 
-fn settings_config(settings: config::Config, target: Option<&str>) -> WorkSpaceArgs {
+fn settings_config(settings: config::Config, target: Option<&str>) -> Result<WorkSpaceArgs> {
     if let Some(target) = target {
-        let profile: WorkSpaceArgs = settings.get(target).unwrap();
-        return profile;
+        let profile: WorkSpaceArgs = settings.get(target)?;
+        return Ok(profile);
     }
-    let profile: WorkSpaceArgs = settings.try_into().unwrap();
-    profile
+    let profile: WorkSpaceArgs = settings.try_into()?;
+    Ok(profile)
 }
 
 pub struct SelectArgs {
@@ -236,36 +236,39 @@ pub struct OpenArgs {
     pub selected_dir: PathBuf,
 }
 
+#[derive(Debug)]
 pub struct PullArgs {
-    pub repo_url: Url,
+    pub repo_url: String,
     pub target_dir: PathBuf,
     pub workspace: WorkSpaceArgs,
 }
 
-fn read_line_iter() -> String {
+fn read_line_iter() -> Result<String> {
     let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Failed to read line");
-    input.trim().to_string()
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_string())
 }
 
 fn select_dir(args: &clap::ArgMatches) -> Option<PathBuf> {
     if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
         Some(selected_dir)
     } else if grep_cli::is_readable_stdin() && !grep_cli::is_tty_stdin() {
-        Some(PathBuf::from(read_line_iter()))
+        if let Ok(path) = read_line_iter() {
+            Some(PathBuf::from(path))
+        } else {
+            None
+        }
     } else {
         None
     }
 }
 
-fn build_workspace_args(args: &clap::ArgMatches) -> WorkSpaceArgs {
-    let settings = config_file_settings();
-    let conf_from_settings = settings_config(settings, args.value_of("profile"));
+fn build_workspace_args(args: &clap::ArgMatches) -> Result<WorkSpaceArgs> {
+    let settings = config_file_settings()?;
+    let conf_from_settings = settings_config(settings, args.value_of("profile"))?;
     let search_dir =
         value_t!(args.value_of("search_dir"), PathBuf).unwrap_or(conf_from_settings.search_dir);
-    WorkSpaceArgs {
+    Ok(WorkSpaceArgs {
         session_name: value_t!(args.value_of("session_name"), String)
             .unwrap_or(conf_from_settings.session_name),
         layout: value_t!(args.value_of("layout"), String).unwrap_or(conf_from_settings.layout),
@@ -274,49 +277,48 @@ fn build_workspace_args(args: &clap::ArgMatches) -> WorkSpaceArgs {
         commands: values_t!(args.values_of("commands"), String)
             .unwrap_or(conf_from_settings.commands),
         search_dir,
-    }
+    })
 }
 
-fn expand_selected_dir(path: PathBuf) -> PathBuf {
+fn expand_selected_dir(path: PathBuf) -> Result<PathBuf> {
     if path == PathBuf::from(".") {
-        return std::env::current_dir().expect("couldn't get current dir");
+        Ok(std::env::current_dir()?)
     } else {
-        return path;
+        Ok(path)
     }
 }
 
-pub fn build_app() -> CommandType {
+pub fn build_app() -> Result<CommandType> {
     let args = args();
-    let workspace = build_workspace_args(&args);
+    let workspace = build_workspace_args(&args)?;
     match args.subcommand_name() {
         None => {
             if let Some(selected_dir) = select_dir(&args) {
-                CommandType::Open(OpenArgs {
+                Ok(CommandType::Open(OpenArgs {
                     workspace,
-                    selected_dir: expand_selected_dir(selected_dir),
-                })
+                    selected_dir: expand_selected_dir(selected_dir)?,
+                }))
             } else {
-                CommandType::Select(SelectArgs { workspace })
+                Ok(CommandType::Select(SelectArgs { workspace }))
             }
         }
         Some("clone") => {
-            let clone_args = args.subcommand_matches("clone").unwrap();
-            let url = clone_args
+            let clone_args = args
+                .subcommand_matches("clone")
+                .ok_or_else(|| anyhow!("Problem reading clones"))?;
+            let repo_url = clone_args
                 .value_of("repo")
-                .expect("No repo specified, what should I clone?");
-            if let Ok(repo_url) = Url::parse(url) {
-                CommandType::Pull(PullArgs {
-                    repo_url,
-                    target_dir: value_t!(args.value_of("target_dir"), PathBuf)
-                        .unwrap_or_else(|_| dirs::home_dir().unwrap()),
-                    workspace,
-                })
-            } else {
-                panic!("Sorry, {} isn't a valid url!", url);
-            }
+                .ok_or_else(|| anyhow!("No repo specified, what should I clone?"))?
+                .to_owned();
+            Ok(CommandType::Pull(PullArgs {
+                repo_url,
+                target_dir: value_t!(args.value_of("target_dir"), PathBuf)
+                    .unwrap_or_else(|_| dirs::home_dir().unwrap()),
+                workspace,
+            }))
         }
 
-        Some("layout") => CommandType::Layout,
-        Some(_) => unreachable!("unexpected subcommand"),
+        Some("layout") => Ok(CommandType::Layout),
+        Some(_) => Err(anyhow!("unexpected subcommand")),
     }
 }

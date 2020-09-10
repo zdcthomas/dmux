@@ -1,7 +1,7 @@
 extern crate tmux_interface;
+use anyhow::Result;
 use regex::Regex;
-use std::process::Output;
-use std::result::Result;
+use std::process::{Command, Output};
 use tmux_interface::pane::PANE_ALL;
 use tmux_interface::session::SESSION_ALL;
 use tmux_interface::window::WINDOW_ALL;
@@ -9,6 +9,15 @@ use tmux_interface::{
     AttachSession, NewSession, NewWindow, SendKeys, Sessions, SplitWindow, SwitchClient,
     TmuxInterface, Windows,
 };
+
+pub fn has_tmux() -> bool {
+    Command::new("tmux")
+        .arg("-V")
+        .output()
+        .unwrap()
+        .status
+        .success()
+}
 
 pub struct Tmux {
     sessions: Vec<Session>,
@@ -18,25 +27,26 @@ pub fn in_tmux() -> bool {
     std::env::var("TMUX").is_ok()
 }
 
-pub fn generate_layout() {
+pub fn generate_layout() -> Result<()> {
     if let Ok(values) = TmuxInterface::new().list_windows(
         Some(false),
         Some("#{window_active} #{window_layout}"),
         None,
     ) {
-        if let Some(layout) = values.split("\n").find(|l| l.starts_with("1")) {
+        if let Some(layout) = values.split('\n').find(|l| l.starts_with('1')) {
             println!(
                 "{}",
                 layout
                     .split_whitespace()
                     .last()
-                    .expect("tmux formatted the layout unexpectedly")
+                    .ok_or_else(|| anyhow!("layout invalid"))?
             );
+            Ok(())
         } else {
-            panic!("No active tmux window")
+            Err(anyhow!("No active tmux window"))
         }
     } else {
-        panic!("Couldn't get layouts")
+        Err(anyhow!("Couldn't get layouts"))
     }
 }
 
@@ -70,7 +80,7 @@ pub fn default_layout_checksum() -> String {
 }
 
 // Make this a result type around Tmux
-pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
+pub fn setup_workspace(workspace: WorkSpace) -> Result<Tmux> {
     let mut tmux = Tmux::new();
     let to_be_deleted: Option<String>;
     let session: &mut Session;
@@ -81,21 +91,21 @@ pub fn setup_workspace(workspace: WorkSpace) -> Tmux {
     } else {
         session = tmux
             .create_session(workspace.session_name.as_str())
-            .expect("could not create session");
+            .ok_or_else(|| anyhow!("could not create session"))?;
 
-        let deletion = session.windows.first().unwrap().name.clone();
+        let deletion = session
+            .windows
+            .first()
+            .ok_or_else(|| anyhow!("No first tmux window"))?
+            .name
+            .clone();
         to_be_deleted = Some(deletion);
     }
-    session
-        .setup_workspace(workspace)
-        .attach()
-        .expect("couldn't attach to window");
+    session.setup_workspace(workspace)?.attach()?;
     if let Some(delete_name) = to_be_deleted {
-        session
-            .remove_window(delete_name.as_str())
-            .expect("Could not remove temp window");
+        session.remove_window(delete_name.as_str())?;
     }
-    tmux
+    Ok(tmux)
 }
 
 impl Tmux {
@@ -140,20 +150,22 @@ impl Tmux {
             session_name: Some(name),
             ..Default::default()
         };
-        tmux.new_session(Some(&new_session))
-            .expect("Could not create new session");
-        self.sessions = Session::all_sessions();
-        self.find_session(name)
-    }
-
-    #[allow(dead_code)]
-    pub fn find_or_create_session(&mut self, name: &str) -> Option<&mut Session> {
-        if self.has_session(name) {
+        if tmux.new_session(Some(&new_session)).is_ok() {
+            self.sessions = Session::all_sessions();
             self.find_session(name)
         } else {
-            self.create_session(name)
+            None
         }
     }
+
+    // #[allow(dead_code)]
+    // pub fn find_or_create_session(&mut self, name: &str) -> Option<&mut Session> {
+    //     if self.has_session(name) {
+    //         self.find_session(name)
+    //     } else {
+    //         self.create_session(name)
+    //     }
+    // }
 }
 
 pub struct Session {
@@ -171,20 +183,18 @@ impl Session {
         target(self.name.as_str(), window_name, pane)
     }
 
-    pub fn setup_workspace(&mut self, workspace: WorkSpace) -> &mut Window {
+    pub fn setup_workspace(&mut self, workspace: WorkSpace) -> Result<&mut Window> {
         if self.has_window(workspace.window_name.as_str()) {
             return self
                 .find_window(workspace.window_name.as_str())
-                .expect("window destroyed during operation");
+                .ok_or_else(|| anyhow!("window destroyed during operation"));
         }
         let window = self
             .create_window(workspace.window_name.as_str(), workspace.dir.as_str())
-            .expect("could not create window");
-        window
-            .setup_layout(workspace.layout, workspace.dir.as_str())
-            .unwrap();
-        window.initial_command(workspace.commands);
-        window
+            .ok_or_else(|| anyhow!("could not create window"))?;
+        window.setup_layout(workspace.layout, workspace.dir.as_str())?;
+        window.initial_command(workspace.commands)?;
+        Ok(window)
     }
 
     pub fn all_sessions() -> Vec<Session> {
@@ -236,11 +246,12 @@ impl Session {
             ..Default::default()
         };
         // Yuck, I really hate this but tmux interface returns a string from new_window
-        TmuxInterface::new()
-            .new_window(Some(&window))
-            .expect("Could not create new window");
-        self.windows = Window::all_in_session(self.name.as_str());
-        self.find_window(window_name.as_str())
+        if TmuxInterface::new().new_window(Some(&window)).is_ok() {
+            self.windows = Window::all_in_session(self.name.as_str());
+            self.find_window(window_name.as_str())
+        } else {
+            None
+        }
     }
 }
 
@@ -305,17 +316,13 @@ impl Window {
         split_result
     }
 
-    pub fn setup_layout(
-        &mut self,
-        layout: Layout,
-        dir: &str,
-    ) -> Result<Output, tmux_interface::Error> {
+    pub fn setup_layout(&mut self, layout: Layout, dir: &str) -> Result<Output> {
         // let lay = layout.layout_string.parse::<tmux_interface::Layout>();
 
         self.reload_panes();
         if self.number_of_panes < layout.window_count {
             for _x in self.number_of_panes..layout.window_count {
-                self.split_window(dir).expect("couldn't split window");
+                self.split_window(dir)?;
             }
         }
         let tmux_command = format!(
@@ -324,7 +331,7 @@ impl Window {
             layout.layout_string
         );
         self.reload_panes();
-        self.send_keys(vec![tmux_command.as_str(), "Enter"])
+        Ok(self.send_keys(vec![tmux_command.as_str(), "Enter"])?)
     }
 
     fn get_pane(&mut self, pane: i32) -> Option<&Pane> {
@@ -351,13 +358,13 @@ impl Window {
     }
 
     // make this return a result
-    pub fn initial_command(&mut self, commands: Commands) {
+    pub fn initial_command(&mut self, commands: Commands) -> Result<()> {
         for (pane, command) in commands.iter().enumerate() {
             if let Some(pane) = self.get_pane(pane as i32) {
-                pane.send_keys(vec![command.as_str(), "Enter"])
-                    .expect("could not send command");
+                pane.send_keys(vec![command.as_str(), "Enter"])?;
             }
         }
+        Ok(())
     }
 
     fn reload_panes(&mut self) {
