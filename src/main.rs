@@ -84,12 +84,17 @@ fn open_selected_dir(config: app::OpenArgs) -> Result<()> {
         layout_string: config.workspace.layout,
         window_count: config.workspace.number_of_panes,
     };
+    let window_name = if let Some(name) = config.workspace.window_name {
+        name
+    } else {
+        path_to_window_name(&config.selected_dir)?
+    };
     let workspaces = WorkSpace {
         commands: config.workspace.commands,
         dir: path_to_string(&config.selected_dir)?,
         layout,
         session_name: config.workspace.session_name,
-        window_name: path_to_window_name(&config.selected_dir)?,
+        window_name,
     };
     tmux::setup_workspace(workspaces)?;
     Ok(())

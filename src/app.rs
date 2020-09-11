@@ -152,6 +152,10 @@ fn default_commands() -> Vec<String> {
     vec!["vim".to_string(), "ls".to_string()]
 }
 
+fn default_window_name() -> Option<String> {
+    None
+}
+
 fn config_file_settings() -> Result<config::Config> {
     // switch to confy perobably
     let default = WorkSpaceArgs::default();
@@ -217,11 +221,14 @@ pub struct WorkSpaceArgs {
     pub search_dir: PathBuf,
     #[serde(default = "default_commands")]
     pub commands: Vec<String>,
+    #[serde(default = "default_window_name")]
+    pub window_name: Option<String>,
 }
 
 impl Default for WorkSpaceArgs {
     fn default() -> Self {
         Self {
+            window_name: None,
             layout: default_layout_checksum(),
             session_name: default_session_name(),
             number_of_panes: default_number_of_panes(),
@@ -269,6 +276,7 @@ fn build_workspace_args(args: &clap::ArgMatches) -> Result<WorkSpaceArgs> {
     let search_dir =
         value_t!(args.value_of("search_dir"), PathBuf).unwrap_or(conf_from_settings.search_dir);
     Ok(WorkSpaceArgs {
+        window_name: value_t!(args.value_of("window_name"), String).ok(),
         session_name: value_t!(args.value_of("session_name"), String)
             .unwrap_or(conf_from_settings.session_name),
         layout: value_t!(args.value_of("layout"), String).unwrap_or(conf_from_settings.layout),
