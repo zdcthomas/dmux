@@ -66,6 +66,7 @@ fn clean_for_target(string: &str) -> String {
     re.replace_all(string, "-").into_owned()
 }
 
+#[derive(Debug)]
 pub struct WorkSpace {
     pub session_name: String,
     pub window_name: String,
@@ -255,6 +256,7 @@ impl Session {
     }
 }
 
+#[derive(Debug)]
 pub struct Layout {
     // I wouldn't need two things here if I could just parse the tmux layout checksum
     pub window_count: i32,
