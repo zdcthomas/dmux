@@ -65,6 +65,12 @@ fn args<'a>() -> clap::ArgMatches<'a> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("profile_from_dir")
+                .short("D")
+                .help("Take the configuration file from the selected directory.")
+                .takes_value(false),
+        )
+        .arg(
             Arg::with_name("profile")
                 .short("P")
                 .long("profile")
@@ -156,9 +162,7 @@ fn default_window_name() -> Option<String> {
     None
 }
 
-fn config_file_settings() -> Result<config::Config> {
-    // switch to confy perobably
-    let default = WorkSpaceArgs::default();
+fn home_config() -> Result<config::Config> {
     let mut settings = config::Config::default();
     let mut config_conf =
         dirs::config_dir().ok_or_else(|| anyhow!("Config dir couldn't be read"))?;
@@ -180,6 +184,13 @@ fn config_file_settings() -> Result<config::Config> {
         // Add in settings from the environment (with a prefix of DMUX)
         // Eg.. `DMUX_SESSION_NAME=foo dmux` would set the `session_name` key
         .merge(config::Environment::with_prefix("DMUX"))?
+        .to_owned())
+}
+
+fn config_file_settings() -> Result<config::Config> {
+    // switch to confy perobably
+    let default = WorkSpaceArgs::default();
+    Ok(home_config()?
         .set_default("layout", default.layout)?
         // the trait `std::convert::From<i32>` is not implemented for `config::value::ValueKind`
         .set_default("number_of_panes", default.number_of_panes as i64)?
