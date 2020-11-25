@@ -1,4 +1,3 @@
-extern crate tmux_interface;
 use anyhow::Result;
 use regex::Regex;
 use std::process::{Command, Output};
