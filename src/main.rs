@@ -1,12 +1,5 @@
 #[macro_use]
 extern crate serde_derive;
-extern crate clap;
-extern crate config;
-extern crate dirs;
-extern crate grep_cli;
-extern crate tmux_interface;
-extern crate url;
-extern crate walkdir;
 #[macro_use]
 extern crate anyhow;
 
