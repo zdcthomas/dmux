@@ -65,6 +65,12 @@ fn args<'a>() -> clap::ArgMatches<'a> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("profile_from_dir")
+                .short("D")
+                .help("Take the configuration file from the selected directory.")
+                .takes_value(false),
+        )
+        .arg(
             Arg::with_name("profile")
                 .short("P")
                 .long("profile")
@@ -156,30 +162,66 @@ fn default_window_name() -> Option<String> {
     None
 }
 
-fn config_file_settings() -> Result<config::Config> {
+pub trait DmuxConf {
+    fn from_homedir() -> Result<config::Config>;
+
+    fn from_dir(dir: &PathBuf) -> Result<config::Config>;
+}
+
+impl DmuxConf for config::Config {
+
+    fn from_homedir() -> Result<config::Config> {
+        let mut settings = config::Config::default();
+        let mut config_conf =
+            dirs::config_dir().ok_or_else(|| anyhow!("Config dir couldn't be read"))?;
+        config_conf.push("dmux/dmux.conf.xxxx");
+
+        let mut home_conf =
+            dirs::home_dir().ok_or_else(|| anyhow!("Home directory couldn't be found"))?;
+        home_conf.push(".dmux.conf.xxxx");
+
+        let mut mac_config =
+            dirs::home_dir().ok_or_else(|| anyhow!("Home directory couldn't be found"))?;
+        mac_config.push(".config/dmux/dmux.conf.xxx");
+        Ok(settings
+            // ~/dmux.conf.(yaml | json | toml)
+            .merge(config::File::with_name(config_conf.to_str().unwrap()).required(false))?
+            // ~/{xdg_config|.config}dmux.conf.(yaml | json | toml)
+            .merge(config::File::with_name(home_conf.to_str().unwrap()).required(false))?
+            .merge(config::File::with_name(mac_config.to_str().unwrap()).required(false))?
+            // Add in settings from the environment (with a prefix of DMUX)
+            // Eg.. `DMUX_SESSION_NAME=foo dmux` would set the `session_name` key
+            .merge(config::Environment::with_prefix("DMUX"))?
+            .to_owned())
+    }
+
+    fn from_dir(dir: &PathBuf) -> Result<config::Config> {
+        let mut settings = config::Config::default();
+        let mut config_conf = dir.clone();
+        config_conf.push("dmux.conf.toml");
+        Ok(settings
+            // ~/dmux.conf.(yaml | json | toml)
+            .merge(config::File::with_name(config_conf.to_str().unwrap()).required(true))?
+            // Eg.. `DMUX_SESSION_NAME=foo dmux` would set the `session_name` key
+            .merge(config::Environment::with_prefix("DMUX"))?
+            .to_owned())
+    }
+
+}
+
+fn config_file_settings(from_dir: Option<&str>) -> Result<config::Config> {
     // switch to confy perobably
     let default = WorkSpaceArgs::default();
-    let mut settings = config::Config::default();
-    let mut config_conf =
-        dirs::config_dir().ok_or_else(|| anyhow!("Config dir couldn't be read"))?;
-    config_conf.push("dmux/dmux.conf.xxxx");
-
-    let mut home_conf =
-        dirs::home_dir().ok_or_else(|| anyhow!("Home directory couldn't be found"))?;
-    home_conf.push(".dmux.conf.xxxx");
-
-    let mut mac_config =
-        dirs::home_dir().ok_or_else(|| anyhow!("Home directory couldn't be found"))?;
-    mac_config.push(".config/dmux/dmux.conf.xxx");
-    Ok(settings
-        // ~/dmux.conf.(yaml | json | toml)
-        .merge(config::File::with_name(config_conf.to_str().unwrap()).required(false))?
-        // ~/{xdg_config|.config}dmux.conf.(yaml | json | toml)
-        .merge(config::File::with_name(home_conf.to_str().unwrap()).required(false))?
-        .merge(config::File::with_name(mac_config.to_str().unwrap()).required(false))?
-        // Add in settings from the environment (with a prefix of DMUX)
-        // Eg.. `DMUX_SESSION_NAME=foo dmux` would set the `session_name` key
-        .merge(config::Environment::with_prefix("DMUX"))?
+    let conf = match from_dir {
+        Some(dir) => {
+            let path = PathBuf::from(dir);
+            config::Config::from_dir(&path)
+        },
+        None => {
+            config::Config::from_homedir()
+        }
+    };
+    Ok(conf?
         .set_default("layout", default.layout)?
         // the trait `std::convert::From<i32>` is not implemented for `config::value::ValueKind`
         .set_default("number_of_panes", default.number_of_panes as i64)?
@@ -271,7 +313,12 @@ fn select_dir(args: &clap::ArgMatches) -> Option<PathBuf> {
 }
 
 fn build_workspace_args(args: &clap::ArgMatches) -> Result<WorkSpaceArgs> {
-    let settings = config_file_settings()?;
+    let config_dir = if args.is_present("profile_from_dir") {
+        args.value_of("selected_dir")
+    } else {
+        None
+    };
+    let settings = config_file_settings(config_dir)?;
     let conf_from_settings = settings_config(settings, args.value_of("profile"))?;
     let search_dir =
         value_t!(args.value_of("search_dir"), PathBuf).unwrap_or(conf_from_settings.search_dir);
