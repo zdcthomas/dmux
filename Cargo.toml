@@ -19,7 +19,7 @@ codegen-units = 1
 
 [dependencies]
 colored = "2.0.0"
-clap = "~2.33.1"
+clap = { version = "3.1.18", features = ["derive", "cargo"] }
 config = '0.10.1'
 dirs = "2.0.2"
 grep-cli = "0.1"
