@@ -4,6 +4,7 @@ use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+// const DEFAULT_LAYOUT: &str = "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}";
 
 fn args() -> clap::ArgMatches {
     let fzf_available = Command::new("fzf")
@@ -142,7 +143,7 @@ fn default_session_name() -> String {
     "dev".to_string()
 }
 
-fn default_number_of_panes() -> i32 {
+fn default_number_of_panes() -> u8 {
     2
 }
 
@@ -200,9 +201,13 @@ pub struct SelectArgs {
 }
 
 pub enum CommandType {
+    // Open a given selected dir passed in either through stdin or args
     Open(OpenArgs),
+    // Select workspace dir from a fuzzy finder
     Select(SelectArgs),
+    // Pull a repo from a git repository and then open that dir
     Pull(PullArgs),
+    // Generate a tmux layout for the setup of panes in the current window
     Layout,
 }
 
@@ -214,7 +219,7 @@ pub struct WorkSpaceArgs {
     #[serde(default = "default_session_name")]
     pub session_name: String,
     #[serde(default = "default_number_of_panes")]
-    pub number_of_panes: i32,
+    pub number_of_panes: u8,
     #[serde(default = "default_search_dir")]
     pub search_dir: PathBuf,
     #[serde(default = "default_commands")]
@@ -283,7 +288,7 @@ fn build_workspace_args(args: &clap::ArgMatches) -> Result<WorkSpaceArgs> {
             .value_of_t::<String>("layout")
             .unwrap_or(conf_from_settings.layout),
         number_of_panes: args
-            .value_of_t::<i32>("number_of_panes")
+            .value_of_t::<u8>("number_of_panes")
             .unwrap_or(conf_from_settings.number_of_panes),
         commands: args
             .values_of_t::<String>("commands")
