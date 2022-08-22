@@ -290,8 +290,7 @@ fn build_workspace_args(args: &clap::ArgMatches) -> Result<WorkSpaceArgs> {
         number_of_panes: args
             .value_of_t::<u8>("number_of_panes")
             .unwrap_or(conf_from_settings.number_of_panes),
-        commands: args
-            .values_of_t::<String>("commands")
+        commands: dbg!(args.values_of_t::<String>("commands"))
             .unwrap_or(conf_from_settings.commands),
         search_dir,
     })

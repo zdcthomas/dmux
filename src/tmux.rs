@@ -3,6 +3,7 @@
 // in_tmux
 // has_tmux
 
+use std::cmp::max;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -186,11 +187,7 @@ impl WorkSpace {
     }
 
     fn number_of_panes(&self) -> u8 {
-        if self.commands.len() as u8 >= self.number_of_panes {
-            self.commands.len() as u8
-        } else {
-            self.number_of_panes
-        }
+        max(self.commands.len() as u8, self.number_of_panes)
     }
 }
 
