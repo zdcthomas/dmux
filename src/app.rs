@@ -1,55 +1,54 @@
 use anyhow::Result;
-use clap::{
-    crate_authors, crate_description, crate_name, crate_version, value_t, values_t, App, Arg,
-    SubCommand,
-};
+use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
+
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+// const DEFAULT_LAYOUT: &str = "34ed,230x56,0,0{132x56,0,0,3,97x56,133,0,222}";
 
-fn args<'a>() -> clap::ArgMatches<'a> {
+fn args() -> clap::ArgMatches {
     let fzf_available = Command::new("fzf")
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .is_ok();
-    App::new(crate_name!())
+    clap::Command::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
         .arg(
-            Arg::with_name("selected_dir")
+            Arg::new("selected_dir")
                 .help("Open this directory directly without starting a selector")
                 .takes_value(true)
                 // if fzf isn't available, this needs to be specified
                 .required(!fzf_available),
         )
         .arg(
-            Arg::with_name("session_name")
-                .short("s")
+            Arg::new("session_name")
+                .short('s')
                 .long("session_name")
                 .help("specify a specific session name to run")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("window_name")
-                .short("w")
+            Arg::new("window_name")
+                .short('w')
                 .long("window")
                 .help("specify the window name")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("number_of_panes")
-                .short("p")
+            Arg::new("number_of_panes")
+                .short('p')
                 .long("panes")
                 .help("the number of panes to generate.")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("commands")
-                .short("c")
-                .multiple(true)
+            Arg::new("commands")
+                .short('c')
+                .multiple_values(true)
                 .long("commands")
                 .help("commands to run in panes")
                 .long_help(commands_long_help().as_str())
@@ -57,45 +56,45 @@ fn args<'a>() -> clap::ArgMatches<'a> {
         )
         .arg(
             // We should use validator here
-            Arg::with_name("layout")
-                .short("l")
+            Arg::new("layout")
+                .short('l')
                 .long("layout")
                 .help("specify the window layout (layouts are dependent on the number of panes)")
                 .long_help(layout_long_help().as_str())
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("profile")
-                .short("P")
+            Arg::new("profile")
+                .short('P')
                 .long("profile")
                 .help("Use a different configuration profile.")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("search_dir")
-                .short("d")
+            Arg::new("search_dir")
+                .short('d')
                 .long("dir")
                 .help("override of the dir to select from.")
                 .takes_value(true),
         )
         .subcommand(
-            SubCommand::with_name("clone")
+            clap::Command::new("clone")
                 .about("clones a git repository, and then opens a workspace in the repo")
                 .arg(
-                    Arg::with_name("repo")
+                    Arg::new("repo")
                         .help("specifies the repo to clone from")
                         .required(true),
                 )
                 .arg(
-                    Arg::with_name("name")
-                        .short("n")
+                    Arg::new("name")
+                        .short('n')
                         .long("name")
                         .help("sets the local name for the cloned repo")
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("layout").about("generates the current layout string from tmux"),
+            clap::Command::new("layout").about("generates the current layout string from tmux"),
         )
         .get_matches()
 }
@@ -144,7 +143,7 @@ fn default_session_name() -> String {
     "dev".to_string()
 }
 
-fn default_number_of_panes() -> i32 {
+fn default_number_of_panes() -> u8 {
     2
 }
 
@@ -202,9 +201,13 @@ pub struct SelectArgs {
 }
 
 pub enum CommandType {
+    // Open a given selected dir passed in either through stdin or args
     Open(OpenArgs),
+    // Select workspace dir from a fuzzy finder
     Select(SelectArgs),
+    // Pull a repo from a git repository and then open that dir
     Pull(PullArgs),
+    // Generate a tmux layout for the setup of panes in the current window
     Layout,
 }
 
@@ -216,7 +219,7 @@ pub struct WorkSpaceArgs {
     #[serde(default = "default_session_name")]
     pub session_name: String,
     #[serde(default = "default_number_of_panes")]
-    pub number_of_panes: i32,
+    pub number_of_panes: u8,
     #[serde(default = "default_search_dir")]
     pub search_dir: PathBuf,
     #[serde(default = "default_commands")]
@@ -257,7 +260,7 @@ fn read_line_iter() -> Result<String> {
 }
 
 fn select_dir(args: &clap::ArgMatches) -> Option<PathBuf> {
-    if let Ok(selected_dir) = value_t!(args.value_of("selected_dir"), PathBuf) {
+    if let Ok(selected_dir) = args.value_of_t::<PathBuf>("selected_dir") {
         Some(selected_dir)
     } else if grep_cli::is_readable_stdin() && !grep_cli::is_tty_stdin() {
         if let Ok(path) = read_line_iter() {
@@ -273,16 +276,21 @@ fn select_dir(args: &clap::ArgMatches) -> Option<PathBuf> {
 fn build_workspace_args(args: &clap::ArgMatches) -> Result<WorkSpaceArgs> {
     let settings = config_file_settings()?;
     let conf_from_settings = settings_config(settings, args.value_of("profile"))?;
-    let search_dir =
-        value_t!(args.value_of("search_dir"), PathBuf).unwrap_or(conf_from_settings.search_dir);
+    let search_dir = args
+        .value_of_t::<PathBuf>("search_dir")
+        .unwrap_or(conf_from_settings.search_dir);
     Ok(WorkSpaceArgs {
-        window_name: value_t!(args.value_of("window_name"), String).ok(),
-        session_name: value_t!(args.value_of("session_name"), String)
+        window_name: args.value_of_t::<String>("window_name").ok(),
+        session_name: args
+            .value_of_t::<String>("session_name")
             .unwrap_or(conf_from_settings.session_name),
-        layout: value_t!(args.value_of("layout"), String).unwrap_or(conf_from_settings.layout),
-        number_of_panes: value_t!(args.value_of("number_of_panes"), i32)
+        layout: args
+            .value_of_t::<String>("layout")
+            .unwrap_or(conf_from_settings.layout),
+        number_of_panes: args
+            .value_of_t::<u8>("number_of_panes")
             .unwrap_or(conf_from_settings.number_of_panes),
-        commands: values_t!(args.values_of("commands"), String)
+        commands: dbg!(args.values_of_t::<String>("commands"))
             .unwrap_or(conf_from_settings.commands),
         search_dir,
     })
@@ -320,7 +328,8 @@ pub fn build_app() -> Result<CommandType> {
                 .to_owned();
             Ok(CommandType::Pull(PullArgs {
                 repo_url,
-                target_dir: value_t!(args.value_of("target_dir"), PathBuf)
+                target_dir: args
+                    .value_of_t::<PathBuf>("target_dir")
                     .unwrap_or_else(|_| dirs::home_dir().unwrap()),
                 workspace,
             }))
