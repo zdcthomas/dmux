@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
 
+use std::fs::canonicalize;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -290,7 +291,8 @@ fn build_workspace_args(args: &clap::ArgMatches) -> Result<WorkSpaceArgs> {
         number_of_panes: args
             .value_of_t::<u8>("number_of_panes")
             .unwrap_or(conf_from_settings.number_of_panes),
-        commands: dbg!(args.values_of_t::<String>("commands"))
+        commands: args
+            .values_of_t::<String>("commands")
             .unwrap_or(conf_from_settings.commands),
         search_dir,
     })
@@ -312,17 +314,16 @@ pub fn build_app() -> Result<CommandType> {
             if let Some(selected_dir) = select_dir(&args) {
                 Ok(CommandType::Open(OpenArgs {
                     workspace,
-                    selected_dir: expand_selected_dir(selected_dir)?,
+                    selected_dir: expand_selected_dir(canonicalize(selected_dir)?)?,
                 }))
             } else {
                 Ok(CommandType::Select(SelectArgs { workspace }))
             }
         }
         Some("clone") => {
-            let clone_args = args
+            let repo_url = args
                 .subcommand_matches("clone")
-                .ok_or_else(|| anyhow!("Problem reading clones"))?;
-            let repo_url = clone_args
+                .ok_or_else(|| anyhow!("Problem reading clones"))?
                 .value_of("repo")
                 .ok_or_else(|| anyhow!("No repo specified, what should I clone?"))?
                 .to_owned();
