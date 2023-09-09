@@ -3,3 +3,4 @@ nvim
 target
 **/*.rs.bk
 **/**/.DS_Store
+.direnv/

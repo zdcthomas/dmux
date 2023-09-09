@@ -24,19 +24,22 @@ pub fn in_tmux() -> bool {
 
 pub fn setup_workspace(workspace: WorkSpace) {
     let tmux = TmuxCommand::new();
-    if tmux
+    let session_with_right_name_exists = tmux
         .has_session()
         .target_session(&workspace.session_name)
         .output()
         .unwrap()
-        .success()
-    {
+        .success();
+
+    if session_with_right_name_exists {
         let target_session = TargetSession::Raw(&workspace.session_name);
-        if let Some(_window) = Windows::get(&target_session, tmux_interface::WINDOW_ALL)
-            .unwrap()
-            .into_iter()
-            .find(|w| w.name.as_ref().unwrap() == &workspace.window_name())
-        {
+        let window_with_right_name_exists =
+            Windows::get(&target_session, tmux_interface::WINDOW_ALL)
+                .unwrap()
+                .into_iter()
+                .any(|w| w.name.as_ref().unwrap() == &workspace.window_name());
+
+        if window_with_right_name_exists {
             attach_to_window(&workspace, &tmux);
         } else {
             // create window
@@ -59,6 +62,7 @@ pub fn setup_workspace(workspace: WorkSpace) {
         // Create a new session
         tmux.new_session()
             .session_name(&workspace.session_name)
+            .start_directory(&workspace.path_str())
             .detached()
             .window_name(workspace.window_name())
             .output()
