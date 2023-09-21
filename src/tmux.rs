@@ -78,7 +78,7 @@ fn setup_panes_with_commands(workspace: &WorkSpace, tmux: &TmuxCommand) {
     for _ in 0..workspace.number_of_panes() - 1 {
         tmux.split_window()
             .start_directory(workspace.path_str())
-            .target_pane(dbg!(workspace.target_session(None)))
+            .target_pane(workspace.target_session(None))
             .output()
             .unwrap();
     }
