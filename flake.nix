@@ -2,8 +2,14 @@
   inputs = {
     naersk.url = "github:nix-community/naersk/master";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    utils.url = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    cargo2nix = {
+      url = "github:cargo2nix/cargo2nix/release-0.11.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+      inputs.rust-overlay.follows = "rust-overlay";
+    };
   };
 
   outputs = {
@@ -11,33 +17,34 @@
     nixpkgs,
     rust-overlay,
     self,
-    utils,
+    flake-utils,
+    cargo2nix,
   }:
-    utils.lib.eachDefaultSystem (system: let
-      overlays = [(import rust-overlay)];
+    flake-utils.lib.eachDefaultSystem (system: let
+      overlays = [cargo2nix.overlays.default];
       pkgs = (import nixpkgs) {inherit system overlays;};
-      toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-      naersk' = pkgs.callPackage naersk {
-        cargo = toolchain;
-        rustc = toolchain;
-        clippy = toolchain;
+      workspaceShell = rustPkgs.workspaceShell {
+        # This adds cargo2nix to the project shell via the cargo2nix flake
+        packages = [cargo2nix.packages."${system}".cargo2nix];
       };
-      buildInputs = with pkgs; lib.optionals stdenv.isDarwin [libiconv darwin.apple_sdk.frameworks.Security];
-    in {
-      defaultPackage = naersk'.buildPackage ./.;
-      devShell = with pkgs;
-        mkShell {
-          buildInputs = [
-            tmux
-            fzf
-            cargo
-            rustc
-            rustfmt
-            pre-commit
-            rustPackages.clippy
-            rust-analyzer
-          ];
-          RUST_SRC_PATH = rustPlatform.rustLibSrc;
+      rustPkgs = pkgs.rustBuilder.makePackageSet {
+        packageFun = import ./Cargo.nix;
+        rustVersion = "1.73.0";
+      };
+    in rec {
+      devShells = {
+        default = workspaceShell; # nix develop
+      };
+      packages = {
+        dmux = (rustPkgs.workspace.dmux {}).bin;
+        default = packages.dmux;
+      };
+      apps = rec {
+        dmux = {
+          type = "app";
+          program = "${packages.default}/bin/dmux";
         };
+        default = dmux;
+      };
     });
 }
