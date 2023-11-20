@@ -15,4 +15,4 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix build
-      - run: nix develop --comand "cargo" "test"
+      - run: nix develop --command "cargo" "test"
