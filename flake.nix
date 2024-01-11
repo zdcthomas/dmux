@@ -30,6 +30,10 @@
       rustPkgs = pkgs.rustBuilder.makePackageSet {
         packageFun = import ./Cargo.nix;
         rustVersion = "1.73.0";
+        extraRustComponents = [
+          "rust-analyzer"
+          "clippy"
+        ];
       };
     in rec {
       devShells = {

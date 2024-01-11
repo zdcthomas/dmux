@@ -17,8 +17,6 @@ use tmux::WorkSpace;
 use url::Url;
 
 fn main() {
-    println!("test");
-    
     if let Err(err) = run_command() {
         eprintln!("{}: {}", "Error".red(), err);
         err.chain()
