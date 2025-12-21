@@ -12,43 +12,48 @@
     };
   };
 
-  outputs = {
-    naersk,
-    nixpkgs,
-    rust-overlay,
-    self,
-    flake-utils,
-    cargo2nix,
-  }:
-    flake-utils.lib.eachDefaultSystem (system: let
-      overlays = [cargo2nix.overlays.default];
-      pkgs = (import nixpkgs) {inherit system overlays;};
-      workspaceShell = rustPkgs.workspaceShell {
-        # This adds cargo2nix to the project shell via the cargo2nix flake
-        packages = [cargo2nix.packages."${system}".cargo2nix];
-      };
-      rustPkgs = pkgs.rustBuilder.makePackageSet {
-        packageFun = import ./Cargo.nix;
-        rustVersion = "1.73.0";
-        extraRustComponents = [
-          "rust-analyzer"
-          "clippy"
-        ];
-      };
-    in rec {
-      devShells = {
-        default = workspaceShell; # nix develop
-      };
-      packages = {
-        dmux = (rustPkgs.workspace.dmux {}).bin;
-        default = packages.dmux;
-      };
-      apps = rec {
-        dmux = {
-          type = "app";
-          program = "${packages.default}/bin/dmux";
+  outputs =
+    {
+      naersk,
+      nixpkgs,
+      rust-overlay,
+      self,
+      flake-utils,
+      cargo2nix,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        overlays = [ cargo2nix.overlays.default ];
+        pkgs = (import nixpkgs) { inherit system overlays; };
+        workspaceShell = rustPkgs.workspaceShell {
+          # This adds cargo2nix to the project shell via the cargo2nix flake
+          packages = [ cargo2nix.packages."${system}".cargo2nix ];
         };
-        default = dmux;
-      };
-    });
+        rustPkgs = pkgs.rustBuilder.makePackageSet {
+          packageFun = import ./Cargo.nix;
+          rustVersion = "1.73.0";
+          extraRustComponents = [
+            "rust-analyzer"
+            "clippy"
+          ];
+        };
+      in
+      rec {
+        devShells = {
+          default = workspaceShell; # nix develop
+        };
+        packages = {
+          dmux = (rustPkgs.workspace.dmux { }).bin;
+          default = packages.dmux;
+        };
+        apps = rec {
+          dmux = {
+            type = "app";
+            program = "${packages.default}/bin/dmux";
+          };
+          default = dmux;
+        };
+      }
+    );
 }
