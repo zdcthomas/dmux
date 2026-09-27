@@ -25,9 +25,17 @@ Its main job is to open up configurable "workspaces" in whatever directory you w
 It also allows you to specify everything you would normally set in a script like the one above.
 
 For example, the above script using dmux would be:
-`dmux -c nvim fish <path>`
+`dmux -c nvim,fish <path>`
 Then if I wanted the workspace to open 3 panes instead of two, I could add:
-`dmux -c nvim fish "npm i" -p 3 <path>`
+`dmux -c nvim -c fish -c "npm i" -p 3 <path>`
+
+`-c` takes one command per flag, and splits a single value on commas. Both of
+these give the same two panes:
+```bash
+dmux -c nvim,fish <path>
+dmux -c nvim -c fish <path>
+```
+Use the repeated form when a command contains a comma.
 
 But say I wanted to use [fzf](https://github.com/junegunn/fzf) to select a dir to open up. 
 Well, if I have it installed on my system, then I just have to leave off the <path> argument and dmux will automatically open an [fzf](https://github.com/junegunn/fzf) selector, populated with directories to choose from.
@@ -72,7 +80,9 @@ Coming soon
 ## Usage
 * `dmux` alone will use `fzf` to open up a list of dirs in `~`. This is equivalent to saying `fd -td . ~/ | fzf | dmux`
 * `dmux <path>` or `<path> | dmux` will open the workspace in the provided path
-* `dmux clone` will clone a git repo and open the repo in a workspace
+* `dmux clone <repo>` will clone a git repo and open the repo in a workspace.
+  `-t <dir>` sets where to clone into (your home dir by default), and `-n <name>`
+  sets the local name of the clone
 * `dmux layout` will describe the current Tmux layout. This uses the tmux layout representation
 * `dmux --help` for more information
 
@@ -84,6 +94,19 @@ Dmux's configuration tries to be very inclusive in terms of config file types. D
 `~/.config/dmux/dmux.conf.{file_type}`
 and on Linux 
 `$XDG_CONFIG_HOME/dmux/dmux.conf.{file_type}`
+
+Dmux reads every one it finds, in this order. A later file overrides an earlier one:
+
+1. `~/.dmux.conf.{file_type}`
+2. `$XDG_CONFIG_HOME/dmux/dmux.conf.{file_type}` (on macOS, `~/Library/Application Support/dmux/dmux.conf.{file_type}`)
+3. `~/.config/dmux/dmux.conf.{file_type}`
+
+On Linux 2 and 3 are the same file, so dmux reads it once.
+
+A command line argument overrides all of them. Environment variables prefixed
+with `DMUX_` also work, so `DMUX_SESSION_NAME=foo dmux` sets the `session_name` key.
+
+A `search_dir` in a config file may start with `~`, and dmux expands it.
 
 #### Example Configuration File
   This config file has a profile named `javascript` and defaults set
@@ -100,8 +123,16 @@ session_name = "frontend"
 commands = ["nvim", "fish", "yarn watch"]
 ```
 
+A layout only fits one pane count. If the two disagree, tmux refuses the layout.
+Dmux prints a warning, leaves the panes evenly split, and opens the workspace
+anyway. Use `dmux layout` to generate a layout string that matches.
+
+Dmux opens one pane per command, so a `commands` list longer than
+`number_of_panes` raises the pane count to match.
+
 ## External deps
 Currently dmux relies on [fzf](https://github.com/junegunn/fzf) to select a target dir to open the workspace in.
+Inside tmux dmux uses `fzf-tmux` when it is installed, and plain `fzf` otherwise.
 If you have [fd](https://github.com/sharkdp/fd) installed dmux will use it to speed up dir searching.
 
 ## Potential features

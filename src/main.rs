@@ -11,7 +11,7 @@ use anyhow::Result;
 use app::CommandType;
 use colored::*;
 use select::Selector;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tmux::WorkSpace;
 use url::Url;
@@ -70,31 +70,53 @@ fn open_selected_dir(config: app::OpenArgs) -> Result<()> {
         format_checksum: config.workspace.layout,
         window_name: config.workspace.window_name,
         number_of_panes: config.workspace.number_of_panes,
-    });
-    Ok(())
+    })
 }
 
 fn git_url_to_dir_name(git_url: &str) -> Result<String> {
-    if let Ok(url) = Url::parse(git_url) {
-        Ok(url
-            .path_segments()
+    let last_segment = if let Ok(url) = Url::parse(git_url) {
+        url.path_segments()
             .ok_or_else(|| anyhow!("cannot be base"))?
             .last()
             .ok_or_else(|| anyhow!("no segments"))?
-            .replace(".git", ""))
+            .to_owned()
     } else {
-        Ok(git_url
+        git_url
             .split('/')
             .last()
             .ok_or_else(|| anyhow!("I don't know how to parse a dir from {:?}", git_url))?
-            .replace(".git", ""))
+            .to_owned()
+    };
+    // Only the suffix: a repo called `bar.github` keeps its name.
+    Ok(last_segment
+        .strip_suffix(".git")
+        .unwrap_or(&last_segment)
+        .to_owned())
+}
+
+/// Where a clone lands. `--name` wins over the name in the URL.
+fn clone_target(base: &Path, name: Option<&str>, repo_url: &str) -> Result<PathBuf> {
+    let name = match name {
+        Some(name) => name.to_owned(),
+        None => git_url_to_dir_name(repo_url)?,
+    };
+    // A single plain component, so that a name cannot reach outside base.
+    let mut components = Path::new(&name).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(_)), None) => Ok(base.join(name)),
+        _ => Err(anyhow!("{:?} is not a usable directory name for a clone", name)),
     }
 }
 
 fn clone_from(config: &app::PullArgs) -> Result<PathBuf> {
-    let dir_name = git_url_to_dir_name(&config.repo_url)?;
-    let target = config.target_dir.join(dir_name);
-    let output = Command::new("git")
+    let target = clone_target(
+        &config.target_dir,
+        config.name.as_deref(),
+        &config.repo_url,
+    )?;
+    // Inherit both streams, so that the user sees git's progress on a slow
+    // clone. `output()` would capture the progress and show nothing.
+    let status = Command::new("git")
         .arg("clone")
         .arg(config.repo_url.as_str())
         .arg(
@@ -103,11 +125,12 @@ fn clone_from(config: &app::PullArgs) -> Result<PathBuf> {
                 .ok_or_else(|| anyhow!("Specified target couldn't be used {:?}", target))?,
         )
         .stdout(Stdio::inherit())
-        .output()?;
-    if output.status.success() {
+        .stderr(Stdio::inherit())
+        .status()?;
+    if status.success() {
         Ok(target)
     } else {
-        Err(anyhow!("{}", String::from_utf8(output.stderr)?))
+        Err(anyhow!("git could not clone {:?}", config.repo_url))
     }
 }
 
@@ -128,14 +151,58 @@ fn clone_from(config: &app::PullArgs) -> Result<PathBuf> {
 //     Ok(String::from(file_str?))
 // }
 
-#[test]
-fn git_url_to_dir_name_test() {
-    assert_eq!(
-        "dmux".to_string(),
-        git_url_to_dir_name("https://github.com/zdcthomas/dmux").unwrap()
-    );
-    assert_eq!(
-        "dmux".to_string(),
-        git_url_to_dir_name("git@github.com:zdcthomas/dmux.git").unwrap()
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn git_url_to_dir_name_test() {
+        assert_eq!(
+            "dmux".to_string(),
+            git_url_to_dir_name("https://github.com/zdcthomas/dmux").unwrap()
+        );
+        assert_eq!(
+            "dmux".to_string(),
+            git_url_to_dir_name("git@github.com:zdcthomas/dmux.git").unwrap()
+        );
+    }
+
+    #[test]
+    fn only_a_trailing_dot_git_is_stripped() {
+        // `.replace` removed the substring wherever it appeared.
+        assert_eq!(
+            "bar.github".to_string(),
+            git_url_to_dir_name("https://github.com/foo/bar.github").unwrap()
+        );
+        assert_eq!(
+            "my.gitlab.thing".to_string(),
+            git_url_to_dir_name("git@example.com:foo/my.gitlab.thing.git").unwrap()
+        );
+    }
+
+    #[test]
+    fn a_clone_without_a_name_uses_the_name_from_the_url() {
+        assert_eq!(
+            clone_target(Path::new("/tmp/repos"), None, "https://github.com/foo/bar.git").unwrap(),
+            PathBuf::from("/tmp/repos/bar")
+        );
+    }
+
+    #[test]
+    fn a_clone_with_a_name_uses_that_name() {
+        assert_eq!(
+            clone_target(
+                Path::new("/tmp/repos"),
+                Some("renamed"),
+                "https://github.com/foo/bar.git"
+            )
+            .unwrap(),
+            PathBuf::from("/tmp/repos/renamed")
+        );
+    }
+
+    #[test]
+    fn a_clone_name_cannot_escape_the_target_dir() {
+        assert!(clone_target(Path::new("/tmp/repos"), Some("../etc"), "https://x/y.git").is_err());
+    }
 }
