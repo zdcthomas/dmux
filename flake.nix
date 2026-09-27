@@ -24,11 +24,47 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        overlays = [ cargo2nix.overlays.default ];
+        # crates.io rejects the `curl/<ver> Nixpkgs/<ver>` user agent that
+        # nixpkgs `fetchurl` sends and answers `403`, so every crate fetch that
+        # cargo2nix points at `crates.io/api/v1/.../download` fails. The static
+        # CDN serves the identical tarball and does not filter user agents.
+        staticCratesIoOverlay = final: prev: {
+          rustBuilder = prev.rustBuilder.overrideScope (
+            _: prevScope: {
+              rustLib = prevScope.rustLib // {
+                fetchCratesIo =
+                  {
+                    name,
+                    version,
+                    sha256,
+                  }:
+                  final.buildPackages.fetchurl {
+                    name = "${name}-${version}.tar.gz";
+                    url = "https://static.crates.io/crates/${name}/${name}-${version}.crate";
+                    inherit sha256;
+                  };
+              };
+            }
+          );
+        };
+        overlays = [
+          cargo2nix.overlays.default
+          staticCratesIoOverlay
+        ];
         pkgs = (import nixpkgs) { inherit system overlays; };
+        # The cargo2nix flake builds its own binary from its own `pkgs`, which
+        # never sees `staticCratesIoOverlay` and so still hits the `403`. Build
+        # it here from the same sources with the patched `pkgs` instead.
+        cargo2nixPkgs = pkgs.rustBuilder.makePackageSet {
+          packageFun = import "${cargo2nix}/Cargo.nix";
+          workspaceSrc = cargo2nix;
+          rustVersion = "1.75.0";
+          packageOverrides = p: p.rustBuilder.overrides.all;
+        };
+        cargo2nixBin = (cargo2nixPkgs.workspace.cargo2nix { }).bin;
         workspaceShell = rustPkgs.workspaceShell {
-          # This adds cargo2nix to the project shell via the cargo2nix flake
-          packages = [ cargo2nix.packages."${system}".cargo2nix ];
+          # This adds cargo2nix to the project shell
+          packages = [ cargo2nixBin ];
         };
         rustPkgs = pkgs.rustBuilder.makePackageSet {
           packageFun = import ./Cargo.nix;
