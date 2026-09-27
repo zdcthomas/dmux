@@ -6,3 +6,7 @@ target
 .direnv/
 /result
 /result-bin
+
+# Generated knowledge graph. Every run rewrites the mtime and token-cost
+# records, and the graph goes stale as soon as the source moves.
+/graphify-out
